@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
@@ -15,6 +16,8 @@ import {
 } from "@/components/ui/select";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+
+import { apiFetch } from "@/lib/api";
 
 const USERNAME_RE = /^[a-z0-9_]{5,25}$/;
 
@@ -114,19 +117,28 @@ export default function OnboardingPage() {
     setUsernameStatus("checking");
     setUsernameMsg("Checking availability...");
 
-    const t = setTimeout(async () => {
-      try {
-        // For now: pretend it’s available.
-        // In Milestone 1: call /api/username-check?u=${u}
-        if (cancelled) return;
-        setUsernameStatus("available");
-        setUsernameMsg("Available.");
-      } catch (e) {
-        if (cancelled) return;
-        setUsernameStatus("error");
-        setUsernameMsg("Could not check right now.");
-      }
-    }, 350);
+   const t = setTimeout(async () => {
+  try {
+    const data = await apiFetch(`/api/username-check?u=${encodeURIComponent(u)}`);
+    if (cancelled) return;
+
+    if (data.available) {
+      setUsernameStatus("available");
+      setUsernameMsg("Available.");
+    } else if (data.reason === "taken") {
+      setUsernameStatus("taken");
+      setUsernameMsg("Taken. Try a suggestion.");
+      // (optional) store data.suggestions in state to show chips
+    } else {
+      setUsernameStatus("invalid");
+      setUsernameMsg("Use 5–25 chars: letters, numbers, underscore.");
+    }
+  } catch {
+    if (cancelled) return;
+    setUsernameStatus("error");
+    setUsernameMsg("Could not check right now.");
+  }
+}, 350);
 
     return () => {
       cancelled = true;
@@ -164,12 +176,20 @@ export default function OnboardingPage() {
 
   async function finish() {
     // Foundation phase: store locally.
-    // Milestone 1: create profile in Neon + claim username + save fields.
-    localStorage.setItem("chilzz.onboarded", "1");
+    // async function finish() {
+  await apiFetch("/api/profile-setup", {
+    method: "POST",
+    body: JSON.stringify({
+      displayName,
+      username,
+      gender,
+      dob,
+      vibe,
+    }),
+  });
 
-    // Optional: later we can upload avatar to Cloudinary and store URL.
-    nav("/app/pings", { replace: true });
-  }
+  nav("/app/pings", { replace: true });
+}
 
   return (
     <div className="min-h-screen grid place-items-center p-6">

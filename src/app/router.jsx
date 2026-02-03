@@ -12,6 +12,8 @@ import DiscoverPage from "./pages/DiscoverPage";
 import ChillShotsPage from "./pages/ChillShotsPage";
 import ProfilePage from "./pages/ProfilePage";
 
+import { apiFetch } from "../lib/api";
+
 function Protected({ children }) {
   const { user, loading } = useAuth();
   if (loading) return <div className="p-6">Loading...</div>;
@@ -20,8 +22,28 @@ function Protected({ children }) {
 }
 
 function OnboardingGate({ children }) {
-  const onboarded = localStorage.getItem("chilzz.onboarded") === "1";
-  if (!onboarded) return <Navigate to="/onboarding" replace />;
+  const { user } = useAuth();
+  const [state, setState] = React.useState("loading"); // loading | ok | need
+
+  React.useEffect(() => {
+    let alive = true;
+    async function run() {
+      try {
+        if (!user) return;
+        const data = await apiFetch("/api/me");
+        if (!alive) return;
+        setState(data.onboarded ? "ok" : "need");
+      } catch {
+        if (!alive) return;
+        setState("need");
+      }
+    }
+    run();
+    return () => (alive = false);
+  }, [user]);
+
+  if (state === "loading") return <div className="p-6">Loading...</div>;
+  if (state === "need") return <Navigate to="/onboarding" replace />;
   return children;
 }
 
