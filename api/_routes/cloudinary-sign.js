@@ -1,7 +1,7 @@
 /* eslint-disable no-undef */
 import crypto from "crypto";
-import { adminAuth } from "./_lib/firebaseAdmin.js";
-import { getBearerToken, readJson, sendJson } from "./_lib/http.js";
+import { adminAuth } from "../_lib/firebaseAdmin.js";
+import { getBearerToken, readJson, sendJson } from "../_lib/http.js";
 
 function signCloudinaryParams(params, apiSecret) {
   const toSign = Object.keys(params)

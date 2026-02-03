@@ -1,8 +1,8 @@
 /* eslint-disable no-unused-vars */
-import { sql } from "./_lib/db.js";
-import { adminAuth } from "./_lib/firebaseAdmin.js";
-import { getBearerToken, sendJson } from "./_lib/http.js";
-import { getQueryParam, isValidUsername, normalizeUsername } from "./_lib/validate.js";
+import { sql } from "../_lib/db.js";
+import { adminAuth } from "../_lib/firebaseAdmin.js";
+import { getBearerToken, sendJson } from "../_lib/http.js";
+import { getQueryParam, isValidUsername, normalizeUsername } from "../_lib/validate.js";
 
 function buildSuggestions(base) {
   // base is already normalized lowercase

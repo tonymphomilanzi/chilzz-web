@@ -1,7 +1,7 @@
 import { apiFetch } from "@/lib/api";
 
 export async function uploadAvatarToCloudinary(file) {
-  const sign = await apiFetch("/api/cloudinary-sign", {
+  const sign = await apiFetch("/api/cloudinary/sign", {
     method: "POST",
     body: JSON.stringify({ kind: "avatar" }),
   });
@@ -19,12 +19,7 @@ export async function uploadAvatarToCloudinary(file) {
   );
 
   const data = await uploadRes.json();
-  if (!uploadRes.ok) {
-    throw new Error(data?.error?.message || "Cloudinary upload failed");
-  }
+  if (!uploadRes.ok) throw new Error(data?.error?.message || "Cloudinary upload failed");
 
-  return {
-    publicId: data.public_id,
-    url: data.secure_url,
-  };
+  return { publicId: data.public_id, url: data.secure_url };
 }
