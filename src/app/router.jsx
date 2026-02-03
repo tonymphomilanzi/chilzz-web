@@ -11,6 +11,8 @@ import DiscoverPage from "./pages/DiscoverPage";
 import ChillShotsPage from "./pages/ChillShotsPage";
 import ProfilePage from "./pages/ProfilePage";
 
+
+
 function Protected({ children }) {
   const { user, loading } = useAuth();
   if (loading) return <div className="p-6 text-zinc-200">Loading...</div>;
