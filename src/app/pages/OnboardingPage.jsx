@@ -1,6 +1,8 @@
-/* eslint-disable no-unused-vars */
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+
+import { apiFetch } from "@/lib/api";
+import { normalizeUsername, useUsernameAvailability } from "@/app/hooks/useUsernameAvailability";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -17,23 +19,32 @@ import {
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
-import { apiFetch } from "@/lib/api";
+const STEPS = [
+  { key: "basics", title: "Basics", desc: "Tell us about you." },
+  { key: "username", title: "Username", desc: "Claim your @name." },
+  { key: "avatar", title: "Avatar", desc: "Pick a face for your vibe." },
+  { key: "vibe", title: "Vibe", desc: "How you showing up?" },
+  { key: "review", title: "Finish", desc: "Lock it in." },
+];
 
-const USERNAME_RE = /^[a-z0-9_]{5,25}$/;
+const VIBES = [
+  { id: "chillin", label: "Chillin’", hint: "Online, relaxed." },
+  { id: "on_fire", label: "On Fire", hint: "Active, replying fast." },
+  { id: "ghost", label: "Ghost", hint: "Don’t disturb." },
+  { id: "lowkey", label: "Lowkey", hint: "Here, but quiet." },
+  { id: "afk", label: "AFK", hint: "Away." },
+];
 
-function normalizeUsername(value) {
-  return value
-    .toLowerCase()
-    .replace(/[^a-z0-9_]/g, "")
-    .slice(0, 25);
-}
-
-function calcAge(dobStr) {
+function getAge(dobStr) {
   if (!dobStr) return null;
   const dob = new Date(dobStr);
   if (Number.isNaN(dob.getTime())) return null;
-  const diff = Date.now() - dob.getTime();
-  const age = new Date(diff).getUTCFullYear() - 1970;
+
+  const today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  const m = today.getMonth() - dob.getMonth();
+
+  if (m < 0 || (m === 0 && today.getDate() < dob.getDate())) age--;
   return age;
 }
 
@@ -53,26 +64,17 @@ function StepsBar({ total, index }) {
   );
 }
 
+function tryParseApiError(err) {
+  // apiFetch throws Error(text). text might be JSON: {"error":"username_taken"}
+  try {
+    return JSON.parse(err?.message || "{}");
+  } catch {
+    return null;
+  }
+}
+
 export default function OnboardingPage() {
   const nav = useNavigate();
-
-  // If already onboarded, bounce to app
-  useEffect(() => {
-    if (localStorage.getItem("chilzz.onboarded") === "1") {
-      nav("/app/pings", { replace: true });
-    }
-  }, [nav]);
-
-  const steps = useMemo(
-    () => [
-      { key: "basics", title: "Basics", desc: "Tell us about you." },
-      { key: "username", title: "Username", desc: "Claim your @name." },
-      { key: "avatar", title: "Avatar", desc: "Pick a face for your vibe." },
-      { key: "vibe", title: "Vibe", desc: "How you showing up?" },
-      { key: "review", title: "Finish", desc: "Lock it in." },
-    ],
-    []
-  );
 
   const [step, setStep] = useState(0);
 
@@ -82,8 +84,7 @@ export default function OnboardingPage() {
   const [dob, setDob] = useState("");
 
   const [username, setUsername] = useState("");
-  const [usernameStatus, setUsernameStatus] = useState("idle"); // idle|checking|available|taken|invalid|error
-  const [usernameMsg, setUsernameMsg] = useState("");
+  const usernameCheck = useUsernameAvailability(username);
 
   const [vibe, setVibe] = useState("chillin");
 
@@ -91,126 +92,107 @@ export default function OnboardingPage() {
   const [avatarPreview, setAvatarPreview] = useState("");
   const fileRef = useRef(null);
 
+  const [submitBusy, setSubmitBusy] = useState(false);
+  const [submitError, setSubmitError] = useState("");
+
+  const currentStep = STEPS[step];
+  const progressValue = Math.round(((step + 1) / STEPS.length) * 100);
+
   // Avatar preview
   useEffect(() => {
-    if (!avatarFile) return;
+    if (!avatarFile) {
+      setAvatarPreview("");
+      return;
+    }
     const url = URL.createObjectURL(avatarFile);
     setAvatarPreview(url);
     return () => URL.revokeObjectURL(url);
   }, [avatarFile]);
 
-  // Username availability (stub for now; we’ll wire Neon in Milestone 1)
-  useEffect(() => {
-    const u = username;
-    if (!u) {
-      setUsernameStatus("idle");
-      setUsernameMsg("");
-      return;
-    }
-    if (!USERNAME_RE.test(u)) {
-      setUsernameStatus("invalid");
-      setUsernameMsg("Use 5–25 chars: letters, numbers, underscore.");
-      return;
-    }
+  const age = useMemo(() => getAge(dob), [dob]);
+  const dobValid = Boolean(dob) && age !== null && age >= 13;
 
-    let cancelled = false;
-    setUsernameStatus("checking");
-    setUsernameMsg("Checking availability...");
+  const basicsOk = displayName.trim().length >= 2 && Boolean(gender) && dobValid;
+  const usernameOk = usernameCheck.isValid;
+  const vibeOk = Boolean(vibe);
 
-   const t = setTimeout(async () => {
-  try {
-    const data = await apiFetch(`/api/username-check?u=${encodeURIComponent(u)}`);
-    if (cancelled) return;
-
-    if (data.available) {
-      setUsernameStatus("available");
-      setUsernameMsg("Available.");
-    } else if (data.reason === "taken") {
-      setUsernameStatus("taken");
-      setUsernameMsg("Taken. Try a suggestion.");
-      // (optional) store data.suggestions in state to show chips
-    } else {
-      setUsernameStatus("invalid");
-      setUsernameMsg("Use 5–25 chars: letters, numbers, underscore.");
-    }
-  } catch {
-    if (cancelled) return;
-    setUsernameStatus("error");
-    setUsernameMsg("Could not check right now.");
-  }
-}, 350);
-
-    return () => {
-      cancelled = true;
-      clearTimeout(t);
-    };
-  }, [username]);
-
-  const progressValue = Math.round(((step + 1) / steps.length) * 100);
-
-  const age = calcAge(dob);
-  const dobValid = !!dob && age !== null && age >= 13;
-
-  const basicsOk =
-    displayName.trim().length >= 2 &&
-    !!gender &&
-    dobValid;
-
-  const usernameOk = usernameStatus === "available";
-
-  const vibeOk = !!vibe;
+  const canGoNext =
+    (currentStep.key === "basics" && basicsOk) ||
+    (currentStep.key === "username" && usernameOk) ||
+    currentStep.key === "avatar" ||
+    (currentStep.key === "vibe" && vibeOk) ||
+    currentStep.key === "review";
 
   function next() {
-    setStep((s) => Math.min(s + 1, steps.length - 1));
+    setStep((s) => Math.min(s + 1, STEPS.length - 1));
   }
+
   function back() {
     setStep((s) => Math.max(s - 1, 0));
   }
 
-  const canGoNext =
-    (steps[step].key === "basics" && basicsOk) ||
-    (steps[step].key === "username" && usernameOk) ||
-    (steps[step].key === "avatar") ||
-    (steps[step].key === "vibe" && vibeOk) ||
-    (steps[step].key === "review");
-
   async function finish() {
-    // Foundation phase: store locally.
-    // async function finish() {
-  await apiFetch("/api/profile-setup", {
-    method: "POST",
-    body: JSON.stringify({
-      displayName,
-      username,
-      gender,
-      dob,
-      vibe,
-    }),
-  });
+    setSubmitBusy(true);
+    setSubmitError("");
 
-  nav("/app/pings", { replace: true });
-}
+    try {
+      await apiFetch("/api/profile-setup", {
+        method: "POST",
+        body: JSON.stringify({
+          displayName: displayName.trim(),
+          username,
+          gender,
+          dob,
+          vibe,
+          // avatar: later (cloudinary)
+        }),
+      });
+
+      nav("/app/pings", { replace: true });
+    } catch (err) {
+      const parsed = tryParseApiError(err);
+
+      // Common case: someone else claimed username between check and submit
+      if (parsed?.error === "username_taken") {
+        setStep(STEPS.findIndex((s) => s.key === "username"));
+        setSubmitError("That username just got taken. Pick another one.");
+        return;
+      }
+
+      setSubmitError(parsed?.error || err?.message || "Could not finish onboarding.");
+    } finally {
+      setSubmitBusy(false);
+    }
+  }
 
   return (
     <div className="min-h-screen grid place-items-center p-6">
       <Card className="w-full max-w-lg">
         <CardHeader className="space-y-3">
-          <StepsBar total={steps.length} index={step} />
+          <StepsBar total={STEPS.length} index={step} />
           <div className="flex items-center justify-between gap-4">
             <div>
-              <CardTitle>{steps[step].title}</CardTitle>
-              <CardDescription>{steps[step].desc}</CardDescription>
+              <CardTitle>{currentStep.title}</CardTitle>
+              <CardDescription>{currentStep.desc}</CardDescription>
             </div>
             <div className="w-28">
               <Progress value={progressValue} />
-              <div className="mt-1 text-xs text-muted-foreground text-right">{progressValue}%</div>
+              <div className="mt-1 text-xs text-muted-foreground text-right">
+                {progressValue}%
+              </div>
             </div>
           </div>
         </CardHeader>
 
         <CardContent className="space-y-5">
+          {submitError ? (
+            <div className="rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
+              {submitError}
+            </div>
+          ) : null}
+
           {/* STEP: BASICS */}
-          {steps[step].key === "basics" && (
+          {currentStep.key === "basics" && (
             <div className="space-y-4">
               <div className="space-y-1">
                 <Label>Display name</Label>
@@ -252,7 +234,7 @@ export default function OnboardingPage() {
           )}
 
           {/* STEP: USERNAME */}
-          {steps[step].key === "username" && (
+          {currentStep.key === "username" && (
             <div className="space-y-4">
               <div className="space-y-1">
                 <Label>Username</Label>
@@ -261,38 +243,60 @@ export default function OnboardingPage() {
                   value={username}
                   onChange={(e) => setUsername(normalizeUsername(e.target.value))}
                 />
+
                 <div className="flex items-center justify-between">
                   <p
                     className={[
                       "text-xs",
-                      usernameStatus === "available"
+                      usernameCheck.status === "available"
                         ? "text-green-400"
-                        : usernameStatus === "checking"
+                        : usernameCheck.status === "checking"
+                        ? "text-muted-foreground"
+                        : usernameCheck.status === "idle"
                         ? "text-muted-foreground"
                         : "text-red-400",
                     ].join(" ")}
                   >
-                    {usernameMsg}
+                    {usernameCheck.message}
                   </p>
                   <p className="text-xs text-muted-foreground">lowercase only</p>
                 </div>
               </div>
 
+              {usernameCheck.status === "taken" && usernameCheck.suggestions.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {usernameCheck.suggestions.map((s) => (
+                    <Button
+                      key={s}
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setUsername(s)}
+                    >
+                      @{s}
+                    </Button>
+                  ))}
+                </div>
+              ) : null}
+
               <div className="rounded-xl border border-border bg-card p-3">
                 <p className="text-sm text-muted-foreground">
-                  This becomes your identity: <span className="text-foreground">@{username || "username"}</span>
+                  This becomes your identity:{" "}
+                  <span className="text-foreground">@{username || "username"}</span>
                 </p>
               </div>
             </div>
           )}
 
           {/* STEP: AVATAR */}
-          {steps[step].key === "avatar" && (
+          {currentStep.key === "avatar" && (
             <div className="space-y-4">
               <div className="flex items-center gap-4">
                 <Avatar className="h-16 w-16 border border-border">
                   <AvatarImage src={avatarPreview} />
-                  <AvatarFallback>{(displayName || "cz").slice(0, 2).toUpperCase()}</AvatarFallback>
+                  <AvatarFallback>
+                    {(displayName || "cz").slice(0, 2).toUpperCase()}
+                  </AvatarFallback>
                 </Avatar>
 
                 <div className="space-y-2">
@@ -302,8 +306,8 @@ export default function OnboardingPage() {
                     accept="image/*"
                     className="hidden"
                     onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      if (f) setAvatarFile(f);
+                      const f = e.target.files?.[0] || null;
+                      setAvatarFile(f);
                     }}
                   />
 
@@ -311,13 +315,13 @@ export default function OnboardingPage() {
                     <Button type="button" onClick={() => fileRef.current?.click()}>
                       Choose photo
                     </Button>
+
                     {avatarFile ? (
                       <Button
                         type="button"
                         variant="secondary"
                         onClick={() => {
                           setAvatarFile(null);
-                          setAvatarPreview("");
                           if (fileRef.current) fileRef.current.value = "";
                         }}
                       >
@@ -327,7 +331,7 @@ export default function OnboardingPage() {
                   </div>
 
                   <p className="text-xs text-muted-foreground">
-                    We’ll upload this to Cloudinary when we wire the backend.
+                    Next step: we’ll upload this to Cloudinary and store it in Neon.
                   </p>
                 </div>
               </div>
@@ -335,16 +339,10 @@ export default function OnboardingPage() {
           )}
 
           {/* STEP: VIBE */}
-          {steps[step].key === "vibe" && (
+          {currentStep.key === "vibe" && (
             <div className="space-y-3">
               <RadioGroup value={vibe} onValueChange={setVibe} className="space-y-2">
-                {[
-                  { id: "chillin", label: "Chillin’", hint: "Online, relaxed." },
-                  { id: "on_fire", label: "On Fire", hint: "Active, replying fast." },
-                  { id: "ghost", label: "Ghost", hint: "Don’t disturb." },
-                  { id: "lowkey", label: "Lowkey", hint: "Here, but quiet." },
-                  { id: "afk", label: "AFK", hint: "Away." },
-                ].map((v) => (
+                {VIBES.map((v) => (
                   <Label
                     key={v.id}
                     htmlFor={v.id}
@@ -375,7 +373,7 @@ export default function OnboardingPage() {
           )}
 
           {/* STEP: REVIEW */}
-          {steps[step].key === "review" && (
+          {currentStep.key === "review" && (
             <div className="space-y-4">
               <div className="rounded-xl border border-border bg-card p-4 space-y-2">
                 <div className="text-sm">
@@ -394,25 +392,21 @@ export default function OnboardingPage() {
                   <span className="text-muted-foreground">Vibe:</span> {vibe}
                 </div>
               </div>
-
-              <p className="text-xs text-muted-foreground">
-                Next milestone: we’ll save this to Neon + claim username for real.
-              </p>
             </div>
           )}
 
           {/* NAV */}
           <div className="flex items-center justify-between pt-2">
-            <Button type="button" variant="secondary" onClick={back} disabled={step === 0}>
+            <Button type="button" variant="secondary" onClick={back} disabled={step === 0 || submitBusy}>
               Back
             </Button>
 
-            {steps[step].key === "review" ? (
-              <Button type="button" onClick={finish}>
-                Finish
+            {currentStep.key === "review" ? (
+              <Button type="button" onClick={finish} disabled={submitBusy}>
+                {submitBusy ? "Finishing..." : "Finish"}
               </Button>
             ) : (
-              <Button type="button" onClick={next} disabled={!canGoNext}>
+              <Button type="button" onClick={next} disabled={!canGoNext || submitBusy}>
                 Next
               </Button>
             )}
