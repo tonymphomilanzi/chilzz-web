@@ -8,7 +8,7 @@ import AuthPage from "./pages/AuthPage";
 import OnboardingPage from "./pages/OnboardingPage";
 import PingsPage from "./pages/PingsPage";
 import RoomsPage from "./pages/RoomsPage";
-import DiscoverPage from "./pages/DiscoverPage";
+import { DiscoverPage } from "./pages/DiscoverPage";
 import ChillShotsPage from "./pages/ChillShotsPage";
 import ProfilePage from "./pages/ProfilePage";
 
