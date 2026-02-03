@@ -6,9 +6,13 @@ import profileSetup from "./_routes/profile.setup.js";
 import profileUpdate from "./_routes/profile.update.js";
 import cloudinarySign from "./_routes/cloudinary.sign.js";
 
+
+
 const ROUTES = {
   "me": me,
   "username/check": usernameCheck,
+    // ✅ alias for older client code:
+  "username-check": usernameCheck,
   "profile/setup": profileSetup,
   "profile/update": profileUpdate,
   "cloudinary/sign": cloudinarySign,

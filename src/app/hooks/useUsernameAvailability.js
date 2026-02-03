@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api";
 
 const USERNAME_RE = /^[a-z0-9_]{5,25}$/;
-const CHECK_ENDPOINT = "/api/username/check";
+const CHECK_ENDPOINT = "/api/username/check"; // ✅ catch-all route
 
 export function normalizeUsername(input) {
   return String(input || "")
