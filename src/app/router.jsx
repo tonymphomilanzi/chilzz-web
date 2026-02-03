@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React from "react";
 import { createBrowserRouter, Navigate } from "react-router-dom";
 import { useAuth } from "../lib/auth";
