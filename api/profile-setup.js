@@ -1,3 +1,4 @@
+/* eslint-disable no-unused-vars */
 /* eslint-disable no-empty */
 import { sql } from "./_lib/db.js";
 import { adminAuth } from "./_lib/firebaseAdmin.js";
@@ -16,6 +17,11 @@ export default async function handler(req, res) {
 
     const body = await readJson(req);
 
+
+    const avatarPublicId = body.avatarPublicId ? String(body.avatarPublicId) : null;
+    const avatarUrl = body.avatarUrl ? String(body.avatarUrl) : null;
+
+    
     const displayName = String(body.displayName || "").trim();
     const gender = String(body.gender || "");
     const dob = String(body.dob || ""); // "YYYY-MM-DD"
@@ -40,17 +46,21 @@ export default async function handler(req, res) {
       return sendJson(res, 409, { error: "username_already_set" });
     }
 
-    await sql`
-      insert into profiles (user_id, display_name, username, gender, dob, vibe)
-      values (${uid}, ${displayName}, ${username}, ${gender}, ${dob}::date, ${vibe})
-      on conflict (user_id) do update
-      set
-        display_name = excluded.display_name,
-        gender = excluded.gender,
-        dob = excluded.dob,
-        vibe = excluded.vibe,
-        updated_at = now()
-    `;
+
+
+  await sql`
+  insert into profiles (user_id, display_name, username, gender, dob, vibe, avatar_public_id, avatar_url)
+  values (${uid}, ${displayName}, ${username}, ${gender}, ${dob}::date, ${vibe}, ${avatarPublicId}, ${avatarUrl})
+  on conflict (user_id) do update
+  set
+    display_name = excluded.display_name,
+    gender = excluded.gender,
+    dob = excluded.dob,
+    vibe = excluded.vibe,
+    avatar_public_id = excluded.avatar_public_id,
+    avatar_url = excluded.avatar_url,
+    updated_at = now()
+`;
 
     await sql`COMMIT`;
     return sendJson(res, 200, { ok: true });

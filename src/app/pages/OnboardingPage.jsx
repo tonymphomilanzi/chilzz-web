@@ -1,8 +1,10 @@
+/* eslint-disable no-unused-vars */
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { apiFetch } from "@/lib/api";
 import { normalizeUsername, useUsernameAvailability } from "@/app/hooks/useUsernameAvailability";
+import { uploadAvatarToCloudinary } from "@/lib/cloudinaryUpload";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -98,6 +100,11 @@ export default function OnboardingPage() {
   const currentStep = STEPS[step];
   const progressValue = Math.round(((step + 1) / STEPS.length) * 100);
 
+  //
+  const [avatarUploading, setAvatarUploading] = useState(false);
+const [avatarCloud, setAvatarCloud] = useState(null); // { publicId, url }
+const [avatarError, setAvatarError] = useState("");
+
   // Avatar preview
   useEffect(() => {
     if (!avatarFile) {
@@ -135,6 +142,7 @@ export default function OnboardingPage() {
     setSubmitBusy(true);
     setSubmitError("");
 
+
     try {
       await apiFetch("/api/profile-setup", {
         method: "POST",
@@ -144,7 +152,8 @@ export default function OnboardingPage() {
           gender,
           dob,
           vibe,
-          // avatar: later (cloudinary)
+          avatarPublicId: avatarCloud?.publicId || null,
+          avatarUrl: avatarCloud?.url || null,
         }),
       });
 
@@ -293,11 +302,18 @@ export default function OnboardingPage() {
             <div className="space-y-4">
               <div className="flex items-center gap-4">
                 <Avatar className="h-16 w-16 border border-border">
-                  <AvatarImage src={avatarPreview} />
+                  <AvatarImage src={avatarCloud?.url || avatarPreview} />
                   <AvatarFallback>
                     {(displayName || "cz").slice(0, 2).toUpperCase()}
                   </AvatarFallback>
                 </Avatar>
+                {avatarUploading ? (
+  <p className="text-xs text-muted-foreground">Uploading...</p>
+) : null}
+
+{avatarError ? (
+  <p className="text-xs text-red-400">{avatarError}</p>
+) : null}
 
                 <div className="space-y-2">
                   <input
@@ -305,10 +321,35 @@ export default function OnboardingPage() {
                     type="file"
                     accept="image/*"
                     className="hidden"
-                    onChange={(e) => {
-                      const f = e.target.files?.[0] || null;
-                      setAvatarFile(f);
-                    }}
+                   onChange={async (e) => {
+  const f = e.target.files?.[0] || null;
+  setAvatarError("");
+  setAvatarFile(f);
+
+  if (!f) {
+    setAvatarCloud(null);
+    return;
+  }
+
+  // basic guard
+  if (f.size > 5 * 1024 * 1024) {
+    setAvatarError("Max file size is 5MB.");
+    setAvatarFile(null);
+    if (fileRef.current) fileRef.current.value = "";
+    return;
+  }
+
+  setAvatarUploading(true);
+  try {
+    const uploaded = await uploadAvatarToCloudinary(f);
+    setAvatarCloud(uploaded);
+  } catch (err) {
+    setAvatarError(err?.message || "Upload failed.");
+    setAvatarCloud(null);
+  } finally {
+    setAvatarUploading(false);
+  }
+}}
                   />
 
                   <div className="flex gap-2">
@@ -320,10 +361,12 @@ export default function OnboardingPage() {
                       <Button
                         type="button"
                         variant="secondary"
-                        onClick={() => {
-                          setAvatarFile(null);
-                          if (fileRef.current) fileRef.current.value = "";
-                        }}
+                       onClick={() => {
+  setAvatarFile(null);
+  setAvatarCloud(null);
+  setAvatarError("");
+  if (fileRef.current) fileRef.current.value = "";
+}}
                       >
                         Remove
                       </Button>
