@@ -4,14 +4,13 @@ import Sidebar from "./Sidebar";
 
 export default function AppLayout() {
   return (
-    <div className="h-screen w-screen bg-zinc-950 text-zinc-100 flex">
+    <div className="h-screen w-screen bg-background text-foreground flex">
       <Sidebar />
       <main className="flex-1 flex">
-        <div className="flex-1 border-l border-zinc-800">
+        <div className="flex-1 border-l border-border">
           <Outlet />
         </div>
-        {/* right panel placeholder (details / members / info) */}
-        <aside className="hidden lg:block w-[340px] border-l border-zinc-800 bg-zinc-950/60" />
+        <aside className="hidden lg:block w-[340px] border-l border-border bg-background/60" />
       </main>
     </div>
   );

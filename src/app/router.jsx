@@ -12,12 +12,16 @@ import DiscoverPage from "./pages/DiscoverPage";
 import ChillShotsPage from "./pages/ChillShotsPage";
 import ProfilePage from "./pages/ProfilePage";
 
-
-
 function Protected({ children }) {
   const { user, loading } = useAuth();
-  if (loading) return <div className="p-6 text-zinc-200">Loading...</div>;
+  if (loading) return <div className="p-6">Loading...</div>;
   if (!user) return <Navigate to="/auth" replace />;
+  return children;
+}
+
+function OnboardingGate({ children }) {
+  const onboarded = localStorage.getItem("chilzz.onboarded") === "1";
+  if (!onboarded) return <Navigate to="/onboarding" replace />;
   return children;
 }
 
@@ -38,7 +42,9 @@ export const router = createBrowserRouter([
     path: "/app",
     element: (
       <Protected>
-        <AppLayout />
+        <OnboardingGate>
+          <AppLayout />
+        </OnboardingGate>
       </Protected>
     ),
     children: [

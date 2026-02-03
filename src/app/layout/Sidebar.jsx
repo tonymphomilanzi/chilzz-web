@@ -18,10 +18,11 @@ const items = [
   { to: "/app/profile", label: "Profile", Icon: UserCircleIcon },
 ];
 
+// ...imports unchanged
 export default function Sidebar() {
   return (
-    <nav className="w-[72px] border-r border-zinc-800 bg-zinc-950 flex flex-col items-center py-3 gap-2">
-      <div className="h-10 w-10 rounded-xl bg-zinc-900 border border-zinc-800 grid place-items-center mb-2">
+    <nav className="w-[72px] border-r border-border bg-background flex flex-col items-center py-3 gap-2">
+      <div className="h-10 w-10 rounded-xl bg-card border border-border grid place-items-center mb-2">
         <span className="text-sm font-semibold">cz</span>
       </div>
 
@@ -35,8 +36,8 @@ export default function Sidebar() {
               "h-11 w-11 rounded-xl grid place-items-center transition",
               "border border-transparent",
               isActive
-                ? "bg-zinc-900 border-zinc-700"
-                : "hover:bg-zinc-900/60 hover:border-zinc-800"
+                ? "bg-card border-border"
+                : "hover:bg-card/60 hover:border-border"
             )
           }
         >
