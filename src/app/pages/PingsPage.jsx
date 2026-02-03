@@ -1,7 +1,9 @@
 import React from 'react'
 
-export const PingsPage = () => {
+const PingsPage = () => {
   return (
     <div>PingsPage</div>
   )
 }
+
+export default PingsPage

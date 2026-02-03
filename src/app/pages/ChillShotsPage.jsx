@@ -1,7 +1,9 @@
 import React from 'react'
 
-export const ChillShotsPage = () => {
+const ChillShotsPage = () => {
   return (
     <div>ChillShotsPage</div>
   )
 }
+
+export default ChillShotsPage

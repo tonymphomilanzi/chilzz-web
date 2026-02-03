@@ -1,7 +1,9 @@
 import React from 'react'
 
-export const DiscoverPgae = () => {
+const DiscoverPage = () => {
   return (
-    <div>DiscoverPgae</div>
+    <div>DiscoverPage</div>
   )
 }
+
+export default DiscoverPage

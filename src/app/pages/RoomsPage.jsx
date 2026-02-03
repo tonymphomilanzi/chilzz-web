@@ -1,7 +1,9 @@
 import React from 'react'
 
-export const RoomsPage = () => {
+const RoomsPage = () => {
   return (
     <div>RoomsPage</div>
   )
 }
+
+export default RoomsPage
