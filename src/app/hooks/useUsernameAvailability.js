@@ -1,8 +1,8 @@
-/* eslint-disable no-unused-vars */
 import { useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/lib/api";
 
 const USERNAME_RE = /^[a-z0-9_]{5,25}$/;
+const CHECK_ENDPOINT = "/api/username/check";
 
 export function normalizeUsername(input) {
   return String(input || "")
@@ -20,7 +20,6 @@ export function useUsernameAvailability(username) {
   const [message, setMessage] = useState("");
   const [suggestions, setSuggestions] = useState([]);
 
-  // prevents stale responses overwriting latest input
   const seq = useRef(0);
 
   useEffect(() => {
@@ -50,7 +49,7 @@ export function useUsernameAvailability(username) {
       const hardTimeout = setTimeout(() => ac.abort(), 8000);
 
       try {
-        const data = await apiFetch(`/api/username-check?u=${encodeURIComponent(u)}`, {
+        const data = await apiFetch(`${CHECK_ENDPOINT}?u=${encodeURIComponent(u)}`, {
           signal: ac.signal,
         });
 
@@ -72,10 +71,13 @@ export function useUsernameAvailability(username) {
 
         setStatus("invalid");
         setMessage("Use 5–25 chars: letters, numbers, underscore.");
-      } catch (e) {
+      } catch (err) {
         if (seq.current !== requestId) return;
+
+        // DEV-only: expose the real error so you can debug quickly
+        const debugMsg = import.meta.env.DEV ? ` (${String(err?.message || err)})` : "";
         setStatus("error");
-        setMessage("Could not check right now. Try again.");
+        setMessage(`Could not check right now. Try again.${debugMsg}`);
       } finally {
         clearTimeout(hardTimeout);
       }
