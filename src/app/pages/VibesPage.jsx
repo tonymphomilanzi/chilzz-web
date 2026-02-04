@@ -189,63 +189,73 @@ export default function VibesPage() {
     }
   }
 
-  async function acceptVibeCheck(check) {
-    if (!myUid) return;
+ async function acceptVibeCheck(check) {
+  if (!myUid) return;
 
+  try {
     const fromUid = check.fromUid;
-    const toUid = check.toUid;
+    const toUid = check.toUid; // should be me
     const firstMessage = String(check.message || "").trim();
 
     const id = dmChatId(fromUid, toUid);
     const chatRef = doc(db, "chats", id);
     const checkRef = doc(db, "vibeChecks", check.id);
 
-    // Meta snapshots
     const myMeta = {
       displayName: myProfile?.display_name || user?.displayName || "Me",
       username: myProfile?.username || null,
       avatarUrl: myProfile?.avatar_url || user?.photoURL || null,
     };
 
-    const otherMeta = check.fromMeta || { displayName: "Someone", username: null, avatarUrl: null };
+    const otherMeta = check.fromMeta || {
+      displayName: "Someone",
+      username: null,
+      avatarUrl: null,
+    };
 
-    // If chat exists already, don’t duplicate; just mark accepted + open it
-    const existing = await getDoc(chatRef);
-
-    // Create chat doc if needed
-    if (!existing.exists()) {
-      await setDoc(chatRef, {
+    // 1) Ensure chat exists (create/merge). No need to read it first.
+    await setDoc(
+      chatRef,
+      {
         type: "dm",
         memberUids: [fromUid, toUid],
         memberMeta: {
           [fromUid]: otherMeta,
           [toUid]: myMeta,
         },
-        createdAt: serverTimestamp(),
-        lastMessageAt: serverTimestamp(),
-        lastMessageText: firstMessage || "",
-        lastSenderUid: fromUid,
-      });
-    }
+      },
+      { merge: true }
+    );
 
-    // Drop the first vibe into messages if we created chat and have a message
-    // (even if chat existed, we assume the first message may already be there; keep MVP simple)
+    // 2) Import the first message into chat as sender = fromUid
+    // IMPORTANT: message doc id == vibeCheck doc id, and includes viaVibeCheckId
     if (firstMessage) {
-      await addDoc(collection(db, "chats", id, "messages"), {
+      await setDoc(doc(db, "chats", id, "messages", check.id), {
         senderUid: fromUid,
         type: "text",
         text: firstMessage,
+        viaVibeCheckId: check.id,
         createdAt: serverTimestamp(),
       });
     }
 
-    // Update check status (receiver is allowed to do this by rules)
+    // 3) Update chat "last message" summary
+    await updateDoc(chatRef, {
+      lastMessageAt: serverTimestamp(),
+      lastMessageText: firstMessage.slice(0, 200),
+      lastSenderUid: fromUid,
+    });
+
+    // 4) Mark request accepted (this is what removes it from the inbox)
     await updateDoc(checkRef, { status: "accepted" });
 
     setChecksOpen(false);
     nav(`/app/vibes/${id}`);
+  } catch (e) {
+    console.error("acceptVibeCheck failed:", e);
+    // optional: show UI error state
   }
-
+}
   async function declineVibeCheck(check) {
     const checkRef = doc(db, "vibeChecks", check.id);
     await updateDoc(checkRef, { status: "declined" });
