@@ -11,7 +11,8 @@ import {
 } from "@heroicons/react/24/outline";
 
 const items = [
-  { to: "/app/pings", label: "Pings", Icon: ChatBubbleLeftRightIcon },
+
+{ to: "/app/vibes", label: "Vibes", Icon: ChatBubbleLeftRightIcon },
   { to: "/app/rooms", label: "Rooms", Icon: UsersIcon },
   { to: "/app/discover", label: "Discover", Icon: MagnifyingGlassIcon },
   { to: "/app/chillshots", label: "ChillShots", Icon: CameraIcon },

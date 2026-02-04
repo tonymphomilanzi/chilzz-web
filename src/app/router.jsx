@@ -48,7 +48,7 @@ function OnboardingGate({ children }) {
 }
 
 export const router = createBrowserRouter([
-  { path: "/", element: <Navigate to="/app/pings" replace /> },
+  { path: "/", element: <Navigate to="/app/vibes" replace /> },
   { path: "/auth", element: <AuthPage /> },
 
   {
@@ -70,8 +70,8 @@ export const router = createBrowserRouter([
       </Protected>
     ),
     children: [
-      { path: "pings", element: <PingsPage /> },
-      { path: "pings/:chatId", element: <PingsPage /> },
+      { path: "vibes", element: <VibesPage /> },
+      { path: "vibes/:chatId", element: <VibesPage /> },
       { path: "rooms", element: <RoomsPage /> },
       { path: "discover", element: <DiscoverPage /> },
       { path: "chillshots", element: <ChillShotsPage /> },

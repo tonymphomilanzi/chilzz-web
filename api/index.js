@@ -6,7 +6,7 @@ import profileSetup from "./_routes/profile.setup.js";
 import profileUpdate from "./_routes/profile.update.js";
 import cloudinarySign from "./_routes/cloudinary.sign.js";
 import userByUsername from "./_routes/user.by-username.js";
-
+import discoverUsers from "./_routes/discover.users.js";
 
 
 const ROUTES = {
@@ -21,6 +21,11 @@ const ROUTES = {
 
   //
   "user/by-username": userByUsername,
+  
+
+   "discover/users": discoverUsers,
+
+
 };
 
 function getRouteKey(req) {

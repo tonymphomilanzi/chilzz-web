@@ -157,7 +157,7 @@ const [avatarError, setAvatarError] = useState("");
         }),
       });
 
-      nav("/app/pings", { replace: true });
+      nav("/app/vibes", { replace: true });
     } catch (err) {
       const parsed = tryParseApiError(err);
 
