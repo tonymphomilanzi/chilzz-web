@@ -71,6 +71,7 @@ export const router = createBrowserRouter([
     ),
     children: [
       { path: "pings", element: <PingsPage /> },
+      { path: "pings/:chatId", element: <PingsPage /> },
       { path: "rooms", element: <RoomsPage /> },
       { path: "discover", element: <DiscoverPage /> },
       { path: "chillshots", element: <ChillShotsPage /> },

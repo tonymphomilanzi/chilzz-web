@@ -5,6 +5,7 @@ import usernameCheck from "./_routes/username.check.js";
 import profileSetup from "./_routes/profile.setup.js";
 import profileUpdate from "./_routes/profile.update.js";
 import cloudinarySign from "./_routes/cloudinary.sign.js";
+import userByUsername from "./_routes/user.by-username.js";
 
 
 
@@ -17,6 +18,9 @@ const ROUTES = {
  
   "profile/update": profileUpdate,
   "cloudinary/sign": cloudinarySign,
+
+  //
+  "user/by-username": userByUsername,
 };
 
 function getRouteKey(req) {
