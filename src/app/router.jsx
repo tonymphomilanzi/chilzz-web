@@ -6,7 +6,7 @@ import { useAuth } from "../lib/auth";
 import AppLayout from "./layout/AppLayout";
 import AuthPage from "./pages/AuthPage";
 import OnboardingPage from "./pages/OnboardingPage";
-import PingsPage from "./pages/PingsPage";
+import VibesPage from "./pages/VibesPage";
 import RoomsPage from "./pages/RoomsPage";
 import DiscoverPage from "./pages/DiscoverPage";
 import ChillShotsPage from "./pages/ChillShotsPage";
