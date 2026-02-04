@@ -14,6 +14,7 @@ const ROUTES = {
     // ✅ alias for older client code:
   "username-check": usernameCheck,
   "profile/setup": profileSetup,
+ 
   "profile/update": profileUpdate,
   "cloudinary/sign": cloudinarySign,
 };
