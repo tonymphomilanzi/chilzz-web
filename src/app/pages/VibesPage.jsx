@@ -125,15 +125,18 @@ export default function VibesPage() {
       orderBy("createdAt", "desc")
     );
 
-    const unsub = onSnapshot(
-      qChecks,
-      (snap) => {
-        const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        setChecks(items);
-        setChecksLoading(false);
-      },
-      () => setChecksLoading(false)
-    );
+ const unsub = onSnapshot(
+  qChecks,
+  (snap) => {
+    const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    setChecks(items);
+    setChecksLoading(false);
+  },
+  (err) => {
+    console.error("vibeChecks listener error:", err);
+    setChecksLoading(false);
+  }
+);
 
     return () => unsub();
   }, [myUid]);
