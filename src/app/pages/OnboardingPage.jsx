@@ -144,7 +144,7 @@ const [avatarError, setAvatarError] = useState("");
 
 
     try {
-      await apiFetch("/api/profile-setup", {
+      await apiFetch("/api/profile.setup", {
         method: "POST",
         body: JSON.stringify({
           displayName: displayName.trim(),
