@@ -1,7 +1,5 @@
+/* eslint-disable no-unused-vars */
 import React, { useEffect, useMemo, useState } from "react";
-
-
-
 import { useAuth } from "@/lib/auth";
 import { apiFetch } from "@/lib/api";
 import {db,  addDoc, collection, onSnapshot, query, serverTimestamp, where } from "@/lib/firestore";
