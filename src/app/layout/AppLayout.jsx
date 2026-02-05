@@ -1,8 +1,10 @@
 import React from "react";
 import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
+import { usePresenceWriter } from "@/lib/presence";
 
 export default function AppLayout() {
+  usePresenceWriter();
   return (
     <div className="h-screen w-screen bg-background text-foreground flex">
       <Sidebar />

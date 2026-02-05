@@ -13,6 +13,28 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
+import { usePresenceMap } from "@/lib/usePresenceMap";
+
+
+
+function presenceDot(p) {
+  const state = p?.state || "offline";
+  if (state === "online") return "bg-green-500";
+  if (state === "away") return "bg-yellow-500";
+  return "bg-zinc-500";
+}
+
+function vibeLabel(v) {
+  const map = {
+    chillin: "Chillin’",
+    on_fire: "On Fire",
+    ghost: "Ghost",
+    lowkey: "Lowkey",
+    afk: "AFK",
+  };
+  return map[v] || "Chillin’";
+}
+
 function dmChatId(uidA, uidB) {
   const [a, b] = [uidA, uidB].sort();
   return `dm_${a}_${b}`;
@@ -60,6 +82,13 @@ export default function VibesPage() {
     () => chats.find((c) => c.id === chatId) || null,
     [chats, chatId]
   );
+
+  const otherUids = useMemo(() => {
+  if (!myUid) return [];
+  return chats.map((c) => otherUid(c.memberUids, myUid)).filter(Boolean);
+}, [chats, myUid]);
+
+const presenceMap = usePresenceMap(otherUids);
 
   // Load my profile (Neon) for meta snapshot
   useEffect(() => {
@@ -271,28 +300,43 @@ export default function VibesPage() {
     }
   }
 
-  function renderChatRow(c) {
-    const ouid = otherUid(c.memberUids, myUid);
-    const meta = c.memberMeta?.[ouid] || {};
-    const title = meta.displayName || (meta.username ? `@${meta.username}` : "Vibe");
-    const subtitle = c.lastMessageText || "";
+function renderChatRow(c) {
+  const ouid = otherUid(c.memberUids, myUid);
+  const meta = c.memberMeta?.[ouid] || {};
+  const p = presenceMap[ouid];
 
-    const active = c.id === chatId;
+  const title = meta.displayName || (meta.username ? `@${meta.username}` : "Vibe");
+  const subtitle = c.lastMessageText || "";
 
-    return (
-      <button
-        key={c.id}
-        onClick={() => nav(`/app/vibes/${c.id}`)}
-        className={[
-          "w-full text-left px-3 py-3 rounded-xl border transition",
-          active ? "bg-card border-border" : "border-transparent hover:bg-card/60 hover:border-border",
-        ].join(" ")}
-      >
-        <div className="font-medium truncate">{title}</div>
+  const active = c.id === chatId;
+
+  return (
+    <button
+      key={c.id}
+      onClick={() => nav(`/app/vibes/${c.id}`)}
+      className={[
+        "w-full text-left px-3 py-3 rounded-xl border transition flex items-center gap-3",
+        active ? "bg-card border-border" : "border-transparent hover:bg-card/60 hover:border-border",
+      ].join(" ")}
+    >
+      <div className="relative">
+        <Avatar className="h-10 w-10 border border-border">
+          <AvatarImage src={meta.avatarUrl || ""} />
+          <AvatarFallback>{initials(meta.displayName)}</AvatarFallback>
+        </Avatar>
+        <span className={["absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background", presenceDot(p)].join(" ")} />
+      </div>
+
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-2">
+          <div className="font-medium truncate">{title}</div>
+          <div className="text-[11px] text-muted-foreground">{vibeLabel(p?.vibe)}</div>
+        </div>
         <div className="text-xs text-muted-foreground truncate">{subtitle}</div>
-      </button>
-    );
-  }
+      </div>
+    </button>
+  );
+}
 
   const headerTitle = useMemo(() => {
     if (!activeChat || !myUid) return "Your Vibes";
@@ -330,9 +374,36 @@ export default function VibesPage() {
 
       {/* Center thread */}
       <section className="flex-1 flex flex-col">
-        <div className="h-14 border-b border-border px-4 flex items-center justify-between">
-          <div className="font-medium truncate">{headerTitle}</div>
+
+        
+ <div className="h-14 border-b border-border px-4 flex items-center justify-between">
+  {activeChat && myUid ? (() => {
+    const ouid = otherUid(activeChat.memberUids, myUid);
+    const meta = activeChat.memberMeta?.[ouid] || {};
+    const p = presenceMap[ouid];
+
+    return (
+      <div className="flex items-center gap-3 min-w-0">
+        <div className="relative">
+          <Avatar className="h-9 w-9 border border-border">
+            <AvatarImage src={meta.avatarUrl || ""} />
+            <AvatarFallback>{initials(meta.displayName)}</AvatarFallback>
+          </Avatar>
+          <span className={["absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background", presenceDot(p)].join(" ")} />
         </div>
+
+        <div className="min-w-0">
+          <div className="font-medium truncate">{meta.displayName || headerTitle}</div>
+          <div className="text-xs text-muted-foreground truncate">
+            {p?.state === "online" ? "Vibing now" : p?.state === "away" ? "Lowkey" : "Offline"} • {vibeLabel(p?.vibe)}
+          </div>
+        </div>
+      </div>
+    );
+  })() : (
+    <div className="font-medium truncate">{headerTitle}</div>
+  )}
+</div>
 
         <ScrollArea className="flex-1 p-4">
           {!chatId ? (
@@ -343,23 +414,36 @@ export default function VibesPage() {
             <div className="text-sm text-muted-foreground">Drop a vibe.</div>
           ) : (
             <div className="space-y-2">
-              {messages.map((m) => {
-                const mine = m.senderUid === myUid;
-                return (
-                  <div key={m.id} className={mine ? "flex justify-end" : "flex justify-start"}>
-                    <div
-                      className={[
-                        "max-w-[75%] rounded-2xl px-3 py-2 text-sm border",
-                        mine
-                          ? "bg-primary text-primary-foreground border-transparent"
-                          : "bg-card border-border",
-                      ].join(" ")}
-                    >
-                      {m.text}
-                    </div>
-                  </div>
-                );
-              })}
+             {messages.map((m) => {
+  const mine = m.senderUid === myUid;
+
+  const ouid = activeChat && myUid ? otherUid(activeChat.memberUids, myUid) : null;
+  const otherMeta = ouid ? activeChat?.memberMeta?.[ouid] : null;
+
+  return (
+    <div key={m.id} className={mine ? "flex justify-end" : "flex justify-start"}>
+      {!mine ? (
+        <div className="mr-2 mt-1">
+          <Avatar className="h-7 w-7 border border-border">
+            <AvatarImage src={otherMeta?.avatarUrl || ""} />
+            <AvatarFallback>{initials(otherMeta?.displayName)}</AvatarFallback>
+          </Avatar>
+        </div>
+      ) : null}
+
+      <div
+        className={[
+          "max-w-[75%] rounded-2xl px-3 py-2 text-sm border",
+          mine
+            ? "bg-primary text-primary-foreground border-transparent"
+            : "bg-card border-border",
+        ].join(" ")}
+      >
+        {m.text}
+      </div>
+    </div>
+  );
+})}
             </div>
           )}
         </ScrollArea>

@@ -1,8 +1,13 @@
-/* eslint-disable no-unused-vars */
 import React, { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+
 import { useAuth } from "@/lib/auth";
+import { useMe } from "@/lib/me";
 import { apiFetch } from "@/lib/api";
-import {db, addDoc, collection, onSnapshot, query, serverTimestamp, where } from "@/lib/firestore";
+
+import { usePresenceMap } from "@/lib/usePresenceMap";
+import { db, collection, onSnapshot, query, serverTimestamp, setDoc, doc, where } from "@/lib/firestore";
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -10,8 +15,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
-
-import { useNavigate } from "react-router-dom";
 
 function initials(name) {
   const s = String(name || "").trim();
@@ -24,28 +27,52 @@ function normalizeAt(input) {
   return String(input || "").trim().replace(/^@/, "").toLowerCase();
 }
 
+function presenceDot(p) {
+  const state = p?.state || "offline";
+  if (state === "online") return "bg-green-500";
+  if (state === "away") return "bg-yellow-500";
+  return "bg-zinc-500";
+}
+
+function vibeLabel(v) {
+  const map = {
+    chillin: "Chillin’",
+    on_fire: "On Fire",
+    ghost: "Ghost",
+    lowkey: "Lowkey",
+    afk: "AFK",
+  };
+  return map[v] || "Chillin’";
+}
+
+// deterministic id: one pending request per pair
+function vibeCheckId(fromUid, toUid) {
+  return `vc_${fromUid}_${toUid}`;
+}
+
 export default function DiscoverPage() {
-
   const nav = useNavigate();
-
-const [chatByUserId, setChatByUserId] = useState({});      // otherUid -> chatId
-const [pendingSentTo, setPendingSentTo] = useState({});    // toUid -> true
-
   const { user } = useAuth();
   const myUid = user?.uid;
 
-  const [myProfile, setMyProfile] = useState(null);
+  const { profile: myProfile } = useMe();
 
-  // discover feed
+  // discover feed (Neon)
   const [feed, setFeed] = useState([]);
   const [feedLoading, setFeedLoading] = useState(true);
   const [feedError, setFeedError] = useState("");
 
-  // search
+  // search (Neon)
   const [q, setQ] = useState("");
   const [searchBusy, setSearchBusy] = useState(false);
   const [searchError, setSearchError] = useState("");
   const [searchResult, setSearchResult] = useState(null);
+
+  // For button state:
+  // - chatByUserId: if DM exists -> "Drop a vibe"
+  // - pendingSentTo: if pending request exists -> "Vibe sent"
+  const [chatByUserId, setChatByUserId] = useState({});
+  const [pendingSentTo, setPendingSentTo] = useState({});
 
   // vibe check modal
   const [open, setOpen] = useState(false);
@@ -54,26 +81,7 @@ const [pendingSentTo, setPendingSentTo] = useState({});    // toUid -> true
   const [sendBusy, setSendBusy] = useState(false);
   const [sendError, setSendError] = useState("");
 
-  // load my neon profile (for fromMeta)
-  useEffect(() => {
-    let alive = true;
-    async function loadMe() {
-      try {
-        const me = await apiFetch("/api/me");
-        if (!alive) return;
-        setMyProfile(me.profile || null);
-      } catch {
-        if (!alive) return;
-        setMyProfile(null);
-      }
-    }
-    loadMe();
-    return () => {
-      alive = false;
-    };
-  }, []);
-
-  // load discover feed
+  // Load discover feed
   useEffect(() => {
     let alive = true;
 
@@ -98,60 +106,67 @@ const [pendingSentTo, setPendingSentTo] = useState({});    // toUid -> true
     };
   }, []);
 
+  // Listen to my existing chats to know if I already "chill" with someone
+  useEffect(() => {
+    if (!myUid) return;
 
+    const qChats = query(
+      collection(db, "chats"),
+      where("memberUids", "array-contains", myUid)
+    );
 
- useEffect(() => {
-  if (!myUid) return;
+    const unsub = onSnapshot(
+      qChats,
+      (snap) => {
+        const map = {};
+        snap.docs.forEach((d) => {
+          const data = d.data();
+          const memberUids = data.memberUids || [];
+          const other = memberUids.find((x) => x !== myUid);
+          if (other) map[other] = d.id;
+        });
+        setChatByUserId(map);
+      },
+      (err) => console.error("discover chats map error:", err)
+    );
 
-  const qChats = query(
-    collection(db, "chats"),
-    where("memberUids", "array-contains", myUid)
-  );
+    return () => unsub();
+  }, [myUid]);
 
-  const unsub = onSnapshot(
-    qChats,
-    (snap) => {
-      const map = {};
-      snap.docs.forEach((d) => {
-        const data = d.data();
-        const memberUids = data.memberUids || [];
-        const other = memberUids.find((x) => x !== myUid);
-        if (other) map[other] = d.id;
-      });
-      setChatByUserId(map);
-    },
-    (err) => console.error("discover chats map error:", err)
-  );
+  // Listen to outgoing vibe checks (pending)
+  useEffect(() => {
+    if (!myUid) return;
 
-  return () => unsub();
-}, [myUid]);
+    const qOut = query(
+      collection(db, "vibeChecks"),
+      where("fromUid", "==", myUid)
+    );
 
+    const unsub = onSnapshot(
+      qOut,
+      (snap) => {
+        const map = {};
+        snap.docs.forEach((d) => {
+          const vc = d.data();
+          if (vc.status === "pending" && vc.toUid) map[vc.toUid] = true;
+        });
+        setPendingSentTo(map);
+      },
+      (err) => console.error("discover outgoing vibeChecks error:", err)
+    );
 
-useEffect(() => {
-  if (!myUid) return;
+    return () => unsub();
+  }, [myUid]);
 
-  const qOut = query(
-    collection(db, "vibeChecks"),
-    where("fromUid", "==", myUid)
-  );
+  // Presence for users on screen (cap to keep listeners small)
+  const presenceUids = useMemo(() => {
+    const ids = [];
+    if (searchResult?.user_id) ids.push(searchResult.user_id);
+    for (const u of feed) ids.push(u.user_id);
+    return Array.from(new Set(ids)).slice(0, 25);
+  }, [feed, searchResult]);
 
-  const unsub = onSnapshot(
-    qOut,
-    (snap) => {
-      const map = {};
-      snap.docs.forEach((d) => {
-        const vc = d.data();
-        if (vc.status === "pending" && vc.toUid) {
-          map[vc.toUid] = true;
-        }
-      });
-      setPendingSentTo(map);
-    },
-    (err) => console.error("discover outgoing vibeChecks error:", err)
-  );
-
-  return () => unsub();
-}, [myUid]);
+  const presenceMap = usePresenceMap(presenceUids);
 
   const canSend = useMemo(() => {
     return Boolean(target?.user_id) && firstMsg.trim().length >= 1 && !sendBusy;
@@ -182,18 +197,22 @@ useEffect(() => {
   }
 
   async function sendVibeCheck() {
-
-    if (pendingSentTo[target.user_id]) {
-  throw new Error("Vibe already sent.");
-}
     if (!myUid) return;
 
-    setSendBusy(true);
-    setSendError("");
-
     try {
+      setSendBusy(true);
+      setSendError("");
+
       if (!target?.user_id) throw new Error("No user selected.");
       if (target.user_id === myUid) throw new Error("That’s you.");
+
+      if (chatByUserId[target.user_id]) {
+        throw new Error("You’re already chilling. Drop a vibe in the chat.");
+      }
+
+      if (pendingSentTo[target.user_id]) {
+        throw new Error("Vibe already sent.");
+      }
 
       const msg = firstMsg.trim();
       if (!msg) throw new Error("Drop a vibe first.");
@@ -204,7 +223,10 @@ useEffect(() => {
         avatarUrl: myProfile?.avatar_url || user?.photoURL || null,
       };
 
-      await addDoc(collection(db, "vibeChecks"), {
+      // Deterministic doc id prevents spamming multiple pending requests
+      const id = vibeCheckId(myUid, target.user_id);
+
+      await setDoc(doc(db, "vibeChecks", id), {
         fromUid: myUid,
         toUid: target.user_id,
         status: "pending",
@@ -223,46 +245,63 @@ useEffect(() => {
     }
   }
 
-function UserRow({ u }) {
-  const existingChatId = chatByUserId[u.user_id];
-  const alreadySent = !!pendingSentTo[u.user_id];
+  function UserRow({ u }) {
+    const existingChatId = chatByUserId[u.user_id];
+    const alreadySent = !!pendingSentTo[u.user_id];
+    const p = presenceMap[u.user_id];
 
-  return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-3">
-      {/* LEFT: avatar + names */}
-      <div className="flex items-center gap-3 min-w-0">
-        <Avatar className="h-10 w-10 border border-border">
-          <AvatarImage src={u.avatar_url || ""} />
-          <AvatarFallback>{initials(u.display_name)}</AvatarFallback>
-        </Avatar>
+    const shownVibe = p?.vibe || u.vibe;
+    const shownState = p?.state || "offline";
 
-        <div className="min-w-0">
-          <div className="font-medium truncate">{u.display_name || "Unknown"}</div>
-          <div className="text-xs text-muted-foreground truncate">@{u.username || "—"}</div>
+    return (
+      <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-3">
+        {/* LEFT: avatar + names + presence */}
+        <div className="flex items-center gap-3 min-w-0">
+          <div className="relative">
+            <Avatar className="h-10 w-10 border border-border">
+              <AvatarImage src={u.avatar_url || ""} />
+              <AvatarFallback>{initials(u.display_name)}</AvatarFallback>
+            </Avatar>
+            <span
+              className={[
+                "absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background",
+                presenceDot(p),
+              ].join(" ")}
+              title={shownState}
+            />
+          </div>
+
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <div className="font-medium truncate">{u.display_name || "Unknown"}</div>
+              <div className="text-[11px] text-muted-foreground">{vibeLabel(shownVibe)}</div>
+            </div>
+            <div className="text-xs text-muted-foreground truncate">@{u.username || "—"}</div>
+          </div>
         </div>
-      </div>
 
-      {/* RIGHT: action button state */}
-      {existingChatId ? (
-        <Button onClick={() => nav(`/app/vibes/${existingChatId}`)}>
-          Drop a vibe
-        </Button>
-      ) : alreadySent ? (
-        <Button variant="secondary" disabled>
-          Vibe sent
-        </Button>
-      ) : (
-        <Button onClick={() => openVibeCheck(u)}>
-          Vibe Check
-        </Button>
-      )}
-    </div>
-  );
-}
+        {/* RIGHT: action */}
+        {existingChatId ? (
+          <Button onClick={() => nav(`/app/vibes/${existingChatId}`)}>
+            Drop a vibe
+          </Button>
+        ) : alreadySent ? (
+          <Button variant="secondary" disabled>
+            Vibe sent
+          </Button>
+        ) : (
+          <Button onClick={() => openVibeCheck(u)}>
+            Vibe Check
+          </Button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="h-full p-5">
       <div className="max-w-3xl space-y-5">
+        {/* Search */}
         <Card>
           <CardHeader>
             <CardTitle>Discover</CardTitle>
@@ -293,6 +332,7 @@ function UserRow({ u }) {
           </CardContent>
         </Card>
 
+        {/* Feed */}
         <Card>
           <CardHeader>
             <CardTitle>Trending Vibes</CardTitle>

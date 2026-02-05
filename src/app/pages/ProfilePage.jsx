@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { signOut } from "firebase/auth";
 
-import { apiFetch } from "@/lib/api";
 import { auth } from "@/lib/firebaseClient";
+import { apiFetch } from "@/lib/api";
+import { useMe } from "@/lib/me";
 import { uploadAvatarToCloudinary } from "@/lib/cloudinaryUpload";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -17,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 
 const GENDERS = [
   { value: "male", label: "Male" },
@@ -33,20 +35,21 @@ const VIBES = [
   { value: "afk", label: "AFK" },
 ];
 
-function toInitials(name) {
+function initials(name) {
   const s = String(name || "").trim();
   if (!s) return "CZ";
   const parts = s.split(/\s+/).slice(0, 2);
   return parts.map((p) => p[0]?.toUpperCase()).join("");
 }
 
-function normalizeProfileForForm(p) {
+function normalizeForForm(p) {
   return {
     displayName: p?.display_name || "",
     username: p?.username || "",
     gender: p?.gender || "",
-    dob: p?.dob ? String(p.dob).slice(0, 10) : "", // ensure YYYY-MM-DD
+    dob: p?.dob ? String(p.dob).slice(0, 10) : "",
     vibe: p?.vibe || "chillin",
+    discoverable: typeof p?.discoverable === "boolean" ? p.discoverable : true,
     avatarUrl: p?.avatar_url || "",
     avatarPublicId: p?.avatar_public_id || null,
   };
@@ -55,13 +58,11 @@ function normalizeProfileForForm(p) {
 export default function ProfilePage() {
   const fileRef = useRef(null);
 
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState("");
+  const { profile, loading, refresh } = useMe();
 
-  const [profile, setProfile] = useState(null); // raw from API
   const [editMode, setEditMode] = useState(false);
+  const [form, setForm] = useState(() => normalizeForForm(null));
 
-  const [form, setForm] = useState(() => normalizeProfileForForm(null));
   const [busy, setBusy] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [saveOk, setSaveOk] = useState("");
@@ -69,40 +70,25 @@ export default function ProfilePage() {
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarError, setAvatarError] = useState("");
 
-  const avatarSrc = useMemo(() => form.avatarUrl || profile?.avatar_url || "", [form.avatarUrl, profile]);
+  const avatarSrc = useMemo(() => {
+    return form.avatarUrl || profile?.avatar_url || "";
+  }, [form.avatarUrl, profile?.avatar_url]);
 
-  async function load() {
-    setLoading(true);
-    setLoadError("");
-    try {
-      const me = await apiFetch("/api/me");
-      if (!me.onboarded) {
-        // If user somehow lands here without onboarding, app gate should redirect;
-        // we still guard.
-        setLoadError("Profile not set up yet. Go complete onboarding.");
-        setProfile(null);
-        return;
-      }
-      setProfile(me.profile);
-      setForm(normalizeProfileForForm(me.profile));
-    } catch (e) {
-      setLoadError(e?.message || "Failed to load profile.");
-    } finally {
-      setLoading(false);
-    }
+  // When profile loads the first time, initialize form once (and when leaving edit mode we re-init)
+  React.useEffect(() => {
+    if (!editMode && profile) setForm(normalizeForForm(profile));
+  }, [profile, editMode]);
+
+  async function logout() {
+    await signOut(auth);
   }
-
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   function startEdit() {
     setSaveError("");
     setSaveOk("");
     setAvatarError("");
     setEditMode(true);
-    setForm(normalizeProfileForForm(profile));
+    setForm(normalizeForForm(profile));
   }
 
   function cancelEdit() {
@@ -110,7 +96,7 @@ export default function ProfilePage() {
     setSaveOk("");
     setAvatarError("");
     setEditMode(false);
-    setForm(normalizeProfileForForm(profile));
+    setForm(normalizeForForm(profile));
     if (fileRef.current) fileRef.current.value = "";
   }
 
@@ -156,6 +142,7 @@ export default function ProfilePage() {
           gender: form.gender,
           dob: form.dob,
           vibe: form.vibe,
+          discoverable: form.discoverable,
           avatarUrl: form.avatarUrl || null,
           avatarPublicId: form.avatarPublicId || null,
         }),
@@ -163,16 +150,14 @@ export default function ProfilePage() {
 
       setSaveOk("Saved.");
       setEditMode(false);
-      await load(); // refresh from server as source of truth
+
+      // refresh Neon profile (also updates presence writer inputs)
+      await refresh();
     } catch (err) {
       setSaveError(err?.message || "Failed to save.");
     } finally {
       setBusy(false);
     }
-  }
-
-  async function logout() {
-    await signOut(auth);
   }
 
   if (loading) {
@@ -183,16 +168,18 @@ export default function ProfilePage() {
     );
   }
 
-  if (loadError) {
+  if (!profile) {
     return (
       <div className="h-full p-5">
         <Card className="max-w-xl">
           <CardHeader>
             <CardTitle>Profile</CardTitle>
-            <CardDescription className="text-red-300">{loadError}</CardDescription>
+            <CardDescription>No profile found. Complete onboarding first.</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button variant="secondary" onClick={load}>Retry</Button>
+            <Button variant="secondary" onClick={refresh}>
+              Retry
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -208,23 +195,23 @@ export default function ProfilePage() {
         </CardHeader>
 
         <CardContent className="space-y-5">
-          {/* header row */}
+          {/* Top row */}
           <div className="flex items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-4 min-w-0">
               <Avatar className="h-16 w-16 border border-border">
                 <AvatarImage src={avatarSrc} />
-                <AvatarFallback>{toInitials(profile?.display_name)}</AvatarFallback>
+                <AvatarFallback>{initials(profile.display_name)}</AvatarFallback>
               </Avatar>
 
-              <div>
-                <div className="font-semibold">{profile?.display_name}</div>
-                <div className="text-sm text-muted-foreground">@{profile?.username}</div>
+              <div className="min-w-0">
+                <div className="font-semibold truncate">{profile.display_name}</div>
+                <div className="text-sm text-muted-foreground truncate">@{profile.username}</div>
               </div>
             </div>
 
             <div className="flex gap-2">
               {!editMode ? (
-                <Button onClick={startEdit}>Edit profile</Button>
+                <Button onClick={startEdit}>Edit</Button>
               ) : (
                 <>
                   <Button variant="secondary" onClick={cancelEdit} disabled={busy || avatarUploading}>
@@ -250,9 +237,13 @@ export default function ProfilePage() {
             </div>
           ) : null}
 
-          {/* view mode */}
           {!editMode ? (
+            // VIEW MODE
             <div className="grid gap-3 text-sm">
+              <div className="flex justify-between gap-4">
+                <span className="text-muted-foreground">Discover</span>
+                <span>{profile.discoverable ? "Discoverable" : "Hidden"}</span>
+              </div>
               <div className="flex justify-between gap-4">
                 <span className="text-muted-foreground">Gender</span>
                 <span>{profile.gender}</span>
@@ -273,9 +264,9 @@ export default function ProfilePage() {
               </div>
             </div>
           ) : (
-            /* edit mode */
+            // EDIT MODE
             <div className="space-y-4">
-              {/* avatar upload */}
+              {/* Avatar */}
               <div className="space-y-2">
                 <Label>Avatar</Label>
                 <div className="flex items-center gap-3">
@@ -300,6 +291,20 @@ export default function ProfilePage() {
                 </div>
               </div>
 
+              {/* Discoverable toggle */}
+              <div className="flex items-center justify-between gap-4 rounded-xl border border-border bg-card p-3">
+                <div className="space-y-1">
+                  <div className="text-sm font-medium">Show me in Discover</div>
+                  <div className="text-xs text-muted-foreground">
+                    If off, you won’t appear in Discover—only @search can find you.
+                  </div>
+                </div>
+                <Switch
+                  checked={!!form.discoverable}
+                  onCheckedChange={(v) => setForm((p) => ({ ...p, discoverable: !!v }))}
+                />
+              </div>
+
               <div className="space-y-1">
                 <Label>Display name</Label>
                 <Input
@@ -312,7 +317,7 @@ export default function ProfilePage() {
                 <Label>Username</Label>
                 <Input value={form.username} disabled />
                 <p className="text-xs text-muted-foreground">
-                  Username change will be added with a cooldown.
+                  Username change comes later with a cooldown.
                 </p>
               </div>
 
