@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { apiFetch } from "@/lib/api";
-import {db,  addDoc, collection, onSnapshot, query, serverTimestamp, where } from "@/lib/firestore";
+import {db, addDoc, collection, onSnapshot, query, serverTimestamp, where } from "@/lib/firestore";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -229,8 +229,20 @@ function UserRow({ u }) {
 
   return (
     <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-3">
-      {/* left user info ... unchanged */}
+      {/* LEFT: avatar + names */}
+      <div className="flex items-center gap-3 min-w-0">
+        <Avatar className="h-10 w-10 border border-border">
+          <AvatarImage src={u.avatar_url || ""} />
+          <AvatarFallback>{initials(u.display_name)}</AvatarFallback>
+        </Avatar>
 
+        <div className="min-w-0">
+          <div className="font-medium truncate">{u.display_name || "Unknown"}</div>
+          <div className="text-xs text-muted-foreground truncate">@{u.username || "—"}</div>
+        </div>
+      </div>
+
+      {/* RIGHT: action button state */}
       {existingChatId ? (
         <Button onClick={() => nav(`/app/vibes/${existingChatId}`)}>
           Drop a vibe
@@ -309,7 +321,7 @@ function UserRow({ u }) {
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Vibe Check 👀</DialogTitle>
+              <DialogTitle>Vibe Check</DialogTitle>
             </DialogHeader>
 
             {target ? (
