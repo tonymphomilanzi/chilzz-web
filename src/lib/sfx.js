@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 function createAudio(src, volume = 0.5) {
   const a = new Audio(src);
@@ -8,9 +8,10 @@ function createAudio(src, volume = 0.5) {
 }
 
 /**
- * Web autoplay restrictions:
- * audio.play() may fail until a user gesture occurs.
- * We "unlock" sound after first click/keydown.
+ * chilZz SFX hook
+ * Files should be in /public/sounds/:
+ *  - /sounds/vibe-send.mp3
+ *  - /sounds/vibe-receive.mp3
  */
 export function useSfx() {
   const [enabled, setEnabled] = useState(() => {
@@ -18,26 +19,31 @@ export function useSfx() {
     return v === null ? true : v === "1";
   });
 
+  // Keep track of browser audio unlock
   const unlockedRef = useRef(false);
 
+  // Create audio objects once
   const sendAudio = useMemo(() => createAudio("/sounds/vibe-send.mp3", 0.35), []);
   const receiveAudio = useMemo(() => createAudio("/sounds/vibe-receive.mp3", 0.45), []);
 
+  // Persist preference
   useEffect(() => {
     localStorage.setItem("chilzz.sfx", enabled ? "1" : "0");
   }, [enabled]);
 
+  // Unlock audio after first user gesture (autoplay policies)
   useEffect(() => {
     const unlock = async () => {
       if (unlockedRef.current) return;
+
       try {
-        // attempt a tiny play/pause to unlock (some browsers require it)
+        // Some browsers only unlock after a successful play()
         sendAudio.muted = true;
         await sendAudio.play();
         sendAudio.pause();
         sendAudio.currentTime = 0;
       } catch {
-        // ignore
+        // Ignore; will keep trying on next gesture
       } finally {
         sendAudio.muted = false;
         unlockedRef.current = true;
@@ -53,21 +59,30 @@ export function useSfx() {
     };
   }, [sendAudio]);
 
-  async function play(aud) {
-    if (!enabled) return;
-    try {
-      // restart sound quickly for rapid sends
-      aud.currentTime = 0;
-      await aud.play();
-    } catch {
-      // autoplay blocked or tab restrictions; safe to ignore
-    }
-  }
+  // Base play function (stable)
+  const play = useCallback(
+    async (aud) => {
+      if (!enabled) return;
+
+      try {
+        // reset so rapid sounds work
+        aud.currentTime = 0;
+        await aud.play();
+      } catch {
+        // Autoplay blocked / background tab / user settings
+      }
+    },
+    [enabled]
+  );
+
+  // Stable helpers (IMPORTANT: prevents effect dependency loops)
+  const playSend = useCallback(() => play(sendAudio), [play, sendAudio]);
+  const playReceive = useCallback(() => play(receiveAudio), [play, receiveAudio]);
 
   return {
     enabled,
     setEnabled,
-    playSend: () => play(sendAudio),
-    playReceive: () => play(receiveAudio),
+    playSend,
+    playReceive,
   };
 }

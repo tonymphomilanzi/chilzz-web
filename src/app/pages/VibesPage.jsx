@@ -190,50 +190,57 @@ const presenceMap = usePresenceMap(otherUids);
   }, [myUid]);
 
   // Messages in active chat
-  useEffect(() => {
-    if (!myUid || !chatId) {
-      setMessages([]);
-      return;
-    }
+ useEffect(() => {
+  // reset state properly when chat changes
+  initialMsgsLoadedRef.current = false;
+  lastSeenMsgIdRef.current = null;
 
-    setThreadLoading(true);
-
-    const qMsgs = query(collection(db, "chats", chatId, "messages"), orderBy("createdAt", "asc"));
-
-   const unsub = onSnapshot(
-  qMsgs,
-  (snap) => {
-    const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    setMessages(items);
+  if (!myUid || !chatId) {
+    setMessages([]);
     setThreadLoading(false);
-
-    // Don’t play on the very first load
-    if (!initialMsgsLoadedRef.current) {
-      initialMsgsLoadedRef.current = true;
-      lastSeenMsgIdRef.current = items.at(-1)?.id || null;
-      return;
-    }
-
-    const last = items.at(-1);
-    if (!last) return;
-
-    const lastId = last.id;
-    const prevLastId = lastSeenMsgIdRef.current;
-    lastSeenMsgIdRef.current = lastId;
-
-    // If new last message arrived and it is NOT mine => play receive
-    if (lastId !== prevLastId && last.senderUid && last.senderUid !== myUid) {
-      playReceive();
-    }
-  },
-  (err) => {
-    console.error("messages listener error:", err);
-    setThreadLoading(false);
+    return;
   }
-);
 
-    return () => unsub();
-  }, [myUid, chatId,playReceive]);
+  setThreadLoading(true);
+
+  const qMsgs = query(
+    collection(db, "chats", chatId, "messages"),
+    orderBy("createdAt", "asc")
+  );
+
+  const unsub = onSnapshot(
+    qMsgs,
+    (snap) => {
+      const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+      setMessages(items);
+      setThreadLoading(false);
+
+      // Don’t play on initial load
+      if (!initialMsgsLoadedRef.current) {
+        initialMsgsLoadedRef.current = true;
+        lastSeenMsgIdRef.current = items.length ? items[items.length - 1].id : null;
+        return;
+      }
+
+      const last = items.length ? items[items.length - 1] : null;
+      if (!last) return;
+
+      const prevLastId = lastSeenMsgIdRef.current;
+      lastSeenMsgIdRef.current = last.id;
+
+      if (last.id !== prevLastId && last.senderUid && last.senderUid !== myUid) {
+        playReceive();
+      }
+    },
+    (err) => {
+      console.error("messages listener error:", err);
+      setThreadLoading(false);
+    }
+  );
+
+  return () => unsub();
+}, [myUid, chatId]); // ✅ IMPORTANT: do NOT include playReceive
 
   async function dropVibe() {
     if (!myUid || !chatId) return;
