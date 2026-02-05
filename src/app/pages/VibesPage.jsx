@@ -22,6 +22,8 @@ function otherUid(memberUids, myUid) {
   return (memberUids || []).find((u) => u !== myUid) || myUid;
 }
 
+//
+
 function initials(name) {
   const s = String(name || "").trim();
   if (!s) return "CZ";
