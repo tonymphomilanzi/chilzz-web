@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { addDoc, collection, serverTimestamp, onSnapshot, query,where  } from "firebase/firestore";
 
 import { db } from "@/lib/firebaseClient";
 import { useAuth } from "@/lib/auth";
@@ -13,6 +13,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
+import { useNavigate } from "react-router-dom";
+
 function initials(name) {
   const s = String(name || "").trim();
   if (!s) return "CZ";
@@ -25,6 +27,12 @@ function normalizeAt(input) {
 }
 
 export default function DiscoverPage() {
+
+  const nav = useNavigate();
+
+const [chatByUserId, setChatByUserId] = useState({});      // otherUid -> chatId
+const [pendingSentTo, setPendingSentTo] = useState({});    // toUid -> true
+
   const { user } = useAuth();
   const myUid = user?.uid;
 
@@ -92,6 +100,62 @@ export default function DiscoverPage() {
     };
   }, []);
 
+
+
+  useEffect(() => {
+  if (!myUid) return;
+
+  const qChats = query(
+    collection(db, "chats"),
+    where("memberUids", "array-contains", myUid)
+  );
+
+  const unsub = onSnapshot(
+    qChats,
+    (snap) => {
+      const map = {};
+      snap.docs.forEach((d) => {
+        const data = d.data();
+        const memberUids = data.memberUids || [];
+        const other = memberUids.find((x) => x !== myUid);
+        if (other) map[other] = d.id;
+      });
+      setChatByUserId(map);
+    },
+    (err) => console.error("discover chats map error:", err)
+  );
+
+  return () => unsub();
+}, [myUid]);
+
+
+
+useEffect(() => {
+  if (!myUid) return;
+
+  const qOut = query(
+    collection(db, "vibeChecks"),
+    where("fromUid", "==", myUid)
+  );
+
+  const unsub = onSnapshot(
+    qOut,
+    (snap) => {
+      const map = {};
+      snap.docs.forEach((d) => {
+        const vc = d.data();
+        if (vc.status === "pending" && vc.toUid) {
+          map[vc.toUid] = true;
+        }
+      });
+      setPendingSentTo(map);
+    },
+    (err) => console.error("discover outgoing vibeChecks error:", err)
+  );
+
+  return () => unsub();
+}, [myUid]);
+
   const canSend = useMemo(() => {
     return Boolean(target?.user_id) && firstMsg.trim().length >= 1 && !sendBusy;
   }, [target, firstMsg, sendBusy]);
@@ -121,6 +185,10 @@ export default function DiscoverPage() {
   }
 
   async function sendVibeCheck() {
+
+    if (pendingSentTo[target.user_id]) {
+  throw new Error("Vibe already sent.");
+}
     if (!myUid) return;
 
     setSendBusy(true);
@@ -158,25 +226,30 @@ export default function DiscoverPage() {
     }
   }
 
-  function UserRow({ u }) {
-    return (
-      <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <Avatar className="h-10 w-10 border border-border">
-            <AvatarImage src={u.avatar_url || ""} />
-            <AvatarFallback>{initials(u.display_name)}</AvatarFallback>
-          </Avatar>
+function UserRow({ u }) {
+  const existingChatId = chatByUserId[u.user_id];
+  const alreadySent = !!pendingSentTo[u.user_id];
 
-          <div className="min-w-0">
-            <div className="font-medium truncate">{u.display_name}</div>
-            <div className="text-xs text-muted-foreground truncate">@{u.username}</div>
-          </div>
-        </div>
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-3">
+      {/* left user info ... unchanged */}
 
-        <Button onClick={() => openVibeCheck(u)}>Vibe Check</Button>
-      </div>
-    );
-  }
+      {existingChatId ? (
+        <Button onClick={() => nav(`/app/vibes/${existingChatId}`)}>
+          Drop a vibe
+        </Button>
+      ) : alreadySent ? (
+        <Button variant="secondary" disabled>
+          Vibe sent
+        </Button>
+      ) : (
+        <Button onClick={() => openVibeCheck(u)}>
+          Vibe Check
+        </Button>
+      )}
+    </div>
+  );
+}
 
   return (
     <div className="h-full p-5">

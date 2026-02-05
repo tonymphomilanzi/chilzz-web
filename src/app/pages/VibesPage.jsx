@@ -85,61 +85,95 @@ export default function VibesPage() {
     return () => (alive = false);
   }, []);
 
-  // accepted chats list
-  useEffect(() => {
-    if (!myUid) return;
+// accepted chats list (NO orderBy -> avoids index + missing-field issues)
+async function acceptVibeCheck(check) {
+  if (!myUid) return;
 
-    setListLoading(true);
-    const qChats = query(
-      collection(db, "chats"),
-      where("memberUids", "array-contains", myUid),
-      orderBy("lastMessageAt", "desc")
-    );
+  try {
+    const fromUid = check.fromUid;
+    const toUid = check.toUid; // me
+    const firstMessage = String(check.message || "").trim();
 
-    const unsub = onSnapshot(
-      qChats,
-      (snap) => {
-        const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-        setChats(items);
-        setListLoading(false);
+    const id = dmChatId(fromUid, toUid);
+    const chatRef = doc(db, "chats", id);
+    const checkRef = doc(db, "vibeChecks", check.id);
 
-        if (!chatId && items.length > 0) {
-          nav(`/app/vibes/${items[0].id}`, { replace: true });
-        }
+    const myMeta = {
+      displayName: myProfile?.display_name || user?.displayName || "Me",
+      username: myProfile?.username || null,
+      avatarUrl: myProfile?.avatar_url || user?.photoURL || null,
+    };
+
+    const otherMeta = check.fromMeta || { displayName: "Someone", username: null, avatarUrl: null };
+
+    // ensure chat exists + set summary now
+    await setDoc(
+      chatRef,
+      {
+        type: "dm",
+        memberUids: [fromUid, toUid],
+        memberMeta: { [fromUid]: otherMeta, [toUid]: myMeta },
+        lastMessageAt: serverTimestamp(),
+        lastMessageText: firstMessage ? firstMessage.slice(0, 200) : "",
+        lastSenderUid: fromUid,
+        createdAt: serverTimestamp(),
       },
-      () => setListLoading(false)
+      { merge: true }
     );
 
-    return () => unsub();
-  }, [myUid, nav, chatId]);
+    // import first message (special rules allow this)
+    if (firstMessage) {
+      await setDoc(doc(db, "chats", id, "messages", check.id), {
+        senderUid: fromUid,
+        type: "text",
+        text: firstMessage,
+        viaVibeCheckId: check.id,
+        createdAt: serverTimestamp(),
+      });
+    }
+
+    await updateDoc(checkRef, { status: "accepted" });
+
+    setChecksOpen(false);
+    nav(`/app/vibes/${id}`);
+  } catch (e) {
+    console.error("acceptVibeCheck failed:", e);
+  }
+}
 
   // vibe checks inbox
-  useEffect(() => {
-    if (!myUid) return;
+// vibe checks inbox (query only by toUid; filter pending locally -> no index)
+useEffect(() => {
+  if (!myUid) return;
 
-    setChecksLoading(true);
-    const qChecks = query(
-      collection(db, "vibeChecks"),
-      where("toUid", "==", myUid),
-      where("status", "==", "pending"),
-      orderBy("createdAt", "desc")
-    );
+  setChecksLoading(true);
 
- const unsub = onSnapshot(
-  qChecks,
-  (snap) => {
-    const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    setChecks(items);
-    setChecksLoading(false);
-  },
-  (err) => {
-    console.error("vibeChecks listener error:", err);
-    setChecksLoading(false);
-  }
-);
+  const qChecks = query(
+    collection(db, "vibeChecks"),
+    where("toUid", "==", myUid)
+  );
 
-    return () => unsub();
-  }, [myUid]);
+  const unsub = onSnapshot(
+    qChecks,
+    (snap) => {
+      const all = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+
+      const pending = all
+        .filter((c) => c.status === "pending")
+        .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
+
+      setChecks(pending);
+      setChecksLoading(false);
+    },
+    (err) => {
+      console.error("vibeChecks listener error:", err);
+      setChecksLoading(false);
+    }
+  );
+
+  return () => unsub();
+}, [myUid]);
+    
 
   // messages in active chat
   useEffect(() => {
@@ -256,11 +290,13 @@ export default function VibesPage() {
     // optional: show UI error state
   }
 }
-  async function declineVibeCheck(check) {
-    const checkRef = doc(db, "vibeChecks", check.id);
-    await updateDoc(checkRef, { status: "declined" });
+async function declineVibeCheck(check) {
+  try {
+    await updateDoc(doc(db, "vibeChecks", check.id), { status: "declined" });
+  } catch (e) {
+    console.error("declineVibeCheck failed:", e);
   }
-
+}
   function renderChatRow(c) {
     const ouid = otherUid(c.memberUids, myUid);
     const meta = c.memberMeta?.[ouid] || {};
@@ -404,8 +440,8 @@ export default function VibesPage() {
                           Let’s Chill 
                         </Button>
                         <Button size="sm" variant="secondary" onClick={() => declineVibeCheck(c)}>
-                          Not my vibe 
-                        </Button>
+  Not my vibe 
+</Button>
                       </div>
                     </div>
                   </div>
