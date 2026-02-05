@@ -15,6 +15,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 import { usePresenceMap } from "@/lib/usePresenceMap";
 
+import { useSfx } from "@/lib/sfx";
+
 
 
 function presenceDot(p) {
@@ -54,6 +56,9 @@ function initials(name) {
 }
 
 export default function VibesPage() {
+
+    const { playSend, playReceive } = useSfx();
+
   const { chatId } = useParams();
   const nav = useNavigate();
   const { user } = useAuth();
@@ -77,6 +82,10 @@ export default function VibesPage() {
   const [threadLoading, setThreadLoading] = useState(false);
   const [text, setText] = useState("");
   const [sendBusy, setSendBusy] = useState(false);
+
+
+  const lastSeenMsgIdRef = React.useRef(null);
+  const initialMsgsLoadedRef = React.useRef(false);
 
   const activeChat = useMemo(
     () => chats.find((c) => c.id === chatId) || null,
@@ -191,20 +200,40 @@ const presenceMap = usePresenceMap(otherUids);
 
     const qMsgs = query(collection(db, "chats", chatId, "messages"), orderBy("createdAt", "asc"));
 
-    const unsub = onSnapshot(
-      qMsgs,
-      (snap) => {
-        setMessages(snap.docs.map((d) => ({ id: d.id, ...d.data() })));
-        setThreadLoading(false);
-      },
-      (err) => {
-        console.error("messages listener error:", err);
-        setThreadLoading(false);
-      }
-    );
+   const unsub = onSnapshot(
+  qMsgs,
+  (snap) => {
+    const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+    setMessages(items);
+    setThreadLoading(false);
+
+    // Don’t play on the very first load
+    if (!initialMsgsLoadedRef.current) {
+      initialMsgsLoadedRef.current = true;
+      lastSeenMsgIdRef.current = items.at(-1)?.id || null;
+      return;
+    }
+
+    const last = items.at(-1);
+    if (!last) return;
+
+    const lastId = last.id;
+    const prevLastId = lastSeenMsgIdRef.current;
+    lastSeenMsgIdRef.current = lastId;
+
+    // If new last message arrived and it is NOT mine => play receive
+    if (lastId !== prevLastId && last.senderUid && last.senderUid !== myUid) {
+      playReceive();
+    }
+  },
+  (err) => {
+    console.error("messages listener error:", err);
+    setThreadLoading(false);
+  }
+);
 
     return () => unsub();
-  }, [myUid, chatId]);
+  }, [myUid, chatId,playReceive]);
 
   async function dropVibe() {
     if (!myUid || !chatId) return;
@@ -219,6 +248,8 @@ const presenceMap = usePresenceMap(otherUids);
         text: t,
         createdAt: serverTimestamp(),
       });
+
+     playSend();
 
       await updateDoc(doc(db, "chats", chatId), {
         lastMessageAt: serverTimestamp(),
@@ -344,6 +375,8 @@ function renderChatRow(c) {
     const meta = activeChat.memberMeta?.[ouid] || {};
     return meta.displayName || (meta.username ? `@${meta.username}` : "Vibes");
   }, [activeChat, myUid]);
+
+
 
   return (
     <div className="h-full flex">
