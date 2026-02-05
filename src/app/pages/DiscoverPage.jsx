@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 
+import { db } from "@/lib/firestore";
 
-import { db } from "@/lib/firebaseClient";
 import { useAuth } from "@/lib/auth";
 import { apiFetch } from "@/lib/api";
 import {  addDoc, collection, onSnapshot, query, serverTimestamp, where } from "@/lib/firestore";
@@ -102,10 +102,12 @@ const [pendingSentTo, setPendingSentTo] = useState({});    // toUid -> true
 
 
 
-  useEffect(() => {
+ useEffect(() => {
   if (!myUid) return;
 
-  const qChats = query((collection(db, "chats"), where("memberUids", "array-contains", myUid))
+  const qChats = query(
+    collection(db, "chats"),
+    where("memberUids", "array-contains", myUid)
   );
 
   const unsub = onSnapshot(
@@ -125,7 +127,6 @@ const [pendingSentTo, setPendingSentTo] = useState({});    // toUid -> true
 
   return () => unsub();
 }, [myUid]);
-
 
 
 useEffect(() => {
