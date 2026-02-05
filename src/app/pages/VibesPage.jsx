@@ -383,7 +383,7 @@ export default function VibesPage() {
       <Dialog open={checksOpen} onOpenChange={setChecksOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Vibe Checks 👀</DialogTitle>
+            <DialogTitle>Vibe Checks (People intrestedto chill)</DialogTitle>
           </DialogHeader>
 
           {checksLoading ? (
