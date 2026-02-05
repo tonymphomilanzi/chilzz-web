@@ -105,9 +105,7 @@ const [pendingSentTo, setPendingSentTo] = useState({});    // toUid -> true
   useEffect(() => {
   if (!myUid) return;
 
-  const qChats = query(
-    collection(db, "chats"),
-    where("memberUids", "array-contains", myUid)
+  const qChats = query((collection(db, "chats"), where("memberUids", "array-contains", myUid))
   );
 
   const unsub = onSnapshot(
