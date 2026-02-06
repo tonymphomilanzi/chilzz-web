@@ -25,12 +25,16 @@ import { apiFetch } from "@/lib/api";
 // UI
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 
 // Icons
-import { ArrowLeftIcon } from "@heroicons/react/24/outline";
+import {
+  ArrowLeftIcon,
+  PaperAirplaneIcon,
+  FaceSmileIcon,
+  PaperClipIcon,
+} from "@heroicons/react/24/outline";
 
 // Presence + SFX
 import { usePresenceMap } from "@/lib/usePresenceMap";
@@ -106,39 +110,6 @@ function isNearBottom(el, threshold = 140) {
   return remaining < threshold;
 }
 
-/* -------------------------- Bubble tail SVGs ---------------------------- */
-// Tail uses "currentColor" so it matches bubble bg via style color.
-
-function TailRight() {
-  return (
-    <svg
-      className="absolute -right-2 bottom-1"
-      style={{ color: "hsl(var(--primary))" }}
-      width="14"
-      height="20"
-      viewBox="0 0 14 20"
-      aria-hidden="true"
-    >
-      <path d="M2 0 C 10 6, 12 10, 2 20 L 14 20 L 14 0 Z" fill="currentColor" />
-    </svg>
-  );
-}
-
-function TailLeft() {
-  return (
-    <svg
-      className="absolute -left-2 bottom-1"
-      style={{ color: "hsl(var(--card))" }}
-      width="14"
-      height="20"
-      viewBox="0 0 14 20"
-      aria-hidden="true"
-    >
-      <path d="M12 0 C 4 6, 2 10, 12 20 L 0 20 L 0 0 Z" fill="currentColor" />
-    </svg>
-  );
-}
-
 /* =============================== Component ============================== */
 
 export default function VibesPage() {
@@ -153,7 +124,7 @@ export default function VibesPage() {
   const { user } = useAuth();
   const myUid = user?.uid;
 
-  // Responsive: desktop split view auto-opens first chat; mobile does NOT.
+  // Responsive
   const isDesktop = useMediaQuery("(min-width: 768px)");
 
   // Neon profile (for accept meta)
@@ -173,8 +144,11 @@ export default function VibesPage() {
   // Thread state
   const [messages, setMessages] = useState([]);
   const [threadLoading, setThreadLoading] = useState(false);
+
+  // Composer state
   const [text, setText] = useState("");
   const [sendBusy, setSendBusy] = useState(false);
+  const composerRef = useRef(null);
 
   // Auto-scroll state
   const threadRef = useRef(null);
@@ -207,6 +181,22 @@ export default function VibesPage() {
   function onThreadScroll() {
     const el = threadRef.current;
     if (isNearBottom(el)) setNewMsgCount(0);
+  }
+
+  function autoresizeComposer() {
+    const el = composerRef.current;
+    if (!el) return;
+    el.style.height = "0px";
+    const next = Math.min(el.scrollHeight, 140); // cap height
+    el.style.height = `${next}px`;
+  }
+
+  function onComposerKeyDown(e) {
+    // Enter sends, Shift+Enter new line (WhatsApp feel)
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      dropVibe();
+    }
   }
 
   /* ------------------------- Effects: Load Me -------------------------- */
@@ -242,7 +232,6 @@ export default function VibesPage() {
       (snap) => {
         const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
 
-        // Sort locally
         items.sort((a, b) => {
           const as = a.lastMessageAt?.seconds || 0;
           const bs = b.lastMessageAt?.seconds || 0;
@@ -252,8 +241,8 @@ export default function VibesPage() {
         setChats(items);
         setListLoading(false);
 
-        // Desktop: auto-open first chat
-        // Mobile: DO NOT auto-open (this is what made your Back button "not work")
+        // Desktop split view: auto-open first chat
+        // Mobile: do not auto-open (prevents back button "bouncing")
         if (isDesktop && !chatId && items.length > 0) {
           nav(`/app/vibes/${items[0].id}`, { replace: true });
         }
@@ -281,7 +270,6 @@ export default function VibesPage() {
       qChecks,
       (snap) => {
         const all = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-
         const pending = all
           .filter((c) => c.status === "pending")
           .sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
@@ -319,14 +307,12 @@ export default function VibesPage() {
       qMsgs,
       (snap) => {
         const items = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-
         const el = threadRef.current;
         const nearBottom = isNearBottom(el);
 
         setMessages(items);
         setThreadLoading(false);
 
-        // First load: jump to bottom, do not play receive sound
         if (!initialMsgsLoadedRef.current) {
           initialMsgsLoadedRef.current = true;
           lastSeenMsgIdRef.current = items.length ? items[items.length - 1].id : null;
@@ -362,9 +348,16 @@ export default function VibesPage() {
     return () => unsub();
   }, [myUid, chatId, playReceive]);
 
+  /* --------------------- Effects: Composer resize ---------------------- */
+  useEffect(() => {
+    autoresizeComposer();
+  }, [text]);
+
   /* --------------------- Actions: Drop a vibe -------------------------- */
   async function dropVibe() {
     if (!myUid || !chatId) return;
+    if (sendBusy) return;
+
     const t = text.trim();
     if (!t) return;
 
@@ -539,9 +532,7 @@ export default function VibesPage() {
       </section>
 
       {/* ---------------- Thread (mobile thread-only) ---------------- */}
-      <section
-        className={`${chatId ? "flex" : "hidden md:flex"} flex-1 flex-col min-h-0`}
-      >
+      <section className={`${chatId ? "flex" : "hidden md:flex"} flex-1 flex-col min-h-0`}>
         {/* Header */}
         <div className="h-14 border-b border-border px-3 md:px-4 flex items-center gap-2">
           {/* Mobile back */}
@@ -603,7 +594,7 @@ export default function VibesPage() {
           ) : threadLoading ? (
             <div className="text-sm text-muted-foreground">Loading…</div>
           ) : messages.length === 0 ? (
-            <div className="text-sm text-muted-foreground">Drop a vibe.</div>
+            <div className="text-sm text-muted-foreground">Say something…</div>
           ) : (
             <div className="space-y-2">
               {messages.map((m, idx) => {
@@ -612,7 +603,6 @@ export default function VibesPage() {
                 const ouid = activeChat && myUid ? otherUid(activeChat.memberUids, myUid) : null;
                 const otherMeta = ouid ? activeChat?.memberMeta?.[ouid] : null;
 
-                // Day separator
                 const prev = messages[idx - 1];
                 const day = formatDayLabel(m.createdAt);
                 const prevDay = prev ? formatDayLabel(prev.createdAt) : null;
@@ -638,22 +628,20 @@ export default function VibesPage() {
                         </div>
                       ) : null}
 
+                      {/* Bubble (no tail) */}
                       <div
                         className={[
-                          "relative max-w-[72%] rounded-2xl shadow-sm",
+                          "max-w-[78%] rounded-2xl shadow-sm",
                           mine
-                            ? "bg-primary text-primary-foreground rounded-br-md"
-                            : "bg-card text-foreground rounded-bl-md ring-1 ring-border/60",
+                            ? "bg-primary/95 text-primary-foreground rounded-br-md"
+                            : "bg-card text-foreground ring-1 ring-border/60 rounded-bl-md",
                         ].join(" ")}
                       >
-                        {mine ? <TailRight /> : <TailLeft />}
-
-                        <div className="relative px-3 py-2 pr-14">
+                        <div className="px-3 py-2">
                           <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">
                             {m.text}
                           </div>
-
-                          <div className="absolute bottom-1 right-2 text-[10px] opacity-70">
+                          <div className="mt-1 flex justify-end text-[10px] opacity-70">
                             {formatMsgTime(m.createdAt)}
                           </div>
                         </div>
@@ -684,18 +672,55 @@ export default function VibesPage() {
           ) : null}
         </div>
 
-        {/* Composer */}
-        <div className="border-t border-border p-3 flex gap-2 items-end bg-background/80 backdrop-blur">
-          <Textarea
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            placeholder="Drop a vibe…"
-            className="min-h-[44px] max-h-[160px]"
-            disabled={!chatId || sendBusy}
-          />
-          <Button onClick={dropVibe} disabled={!chatId || sendBusy || !text.trim()}>
-            Drop a vibe
-          </Button>
+        {/* Composer (WhatsApp-ish) */}
+        <div className="border-t border-border px-2 py-2 bg-background/80 backdrop-blur">
+          <div className="flex items-end gap-2">
+            <Button
+              type="button"
+              variant="ghost"
+              className="h-10 w-10 rounded-full"
+              title="Emoji (soon)"
+              onClick={() => {}}
+            >
+              <FaceSmileIcon className="h-6 w-6" />
+            </Button>
+
+            <Button
+              type="button"
+              variant="ghost"
+              className="h-10 w-10 rounded-full"
+              title="Attach (soon)"
+              onClick={() => {}}
+            >
+              <PaperClipIcon className="h-6 w-6" />
+            </Button>
+
+            <div className="flex-1 rounded-2xl border border-border bg-card px-3 py-2">
+              <textarea
+                ref={composerRef}
+                value={text}
+                onChange={(e) => setText(e.target.value)}
+                onKeyDown={onComposerKeyDown}
+                placeholder="Type a vibe…"
+                className="w-full resize-none bg-transparent outline-none text-sm leading-relaxed min-h-[24px] max-h-[140px]"
+                disabled={!chatId || sendBusy}
+              />
+            </div>
+
+            <Button
+              type="button"
+              onClick={dropVibe}
+              disabled={!chatId || sendBusy || !text.trim()}
+              className="h-10 w-10 rounded-full p-0"
+              title="Send"
+            >
+              <PaperAirplaneIcon className="h-5 w-5 -rotate-45" />
+            </Button>
+          </div>
+
+          <div className="px-1 pt-1 text-[11px] text-muted-foreground">
+            Enter to send • Shift+Enter for new line
+          </div>
         </div>
       </section>
 
