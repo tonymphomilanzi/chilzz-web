@@ -717,10 +717,6 @@ export default function VibesPage() {
               <PaperAirplaneIcon className="h-5 w-5 -rotate-45" />
             </Button>
           </div>
-
-          <div className="px-1 pt-1 text-[11px] text-muted-foreground">
-            Enter to send • Shift+Enter for new line
-          </div>
         </div>
       </section>
 
@@ -728,7 +724,7 @@ export default function VibesPage() {
       <Dialog open={checksOpen} onOpenChange={setChecksOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Vibe Checks 👀</DialogTitle>
+            <DialogTitle>Vibe Checks (People Intrested To Chill With You)</DialogTitle>
           </DialogHeader>
 
           {checksLoading ? (
