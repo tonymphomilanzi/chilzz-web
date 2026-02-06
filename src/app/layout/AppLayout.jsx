@@ -14,6 +14,9 @@ export default function AppLayout() {
         </div>
         <aside className="hidden lg:block w-[340px] border-l border-border bg-background/60" />
       </main>
+
+        {/* Mobile bottom tabs */}
+      <BottomNav />
     </div>
   );
 }

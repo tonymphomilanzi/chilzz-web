@@ -1,4 +1,3 @@
-/* eslint-disable no-unused-vars */
 import React from "react";
 import { NavLink } from "react-router-dom";
 import clsx from "clsx";
@@ -11,22 +10,16 @@ import {
 } from "@heroicons/react/24/outline";
 
 const items = [
-
-{ to: "/app/vibes", label: "Vibes", Icon: ChatBubbleLeftRightIcon },
+  { to: "/app/vibes", label: "Vibes", Icon: ChatBubbleLeftRightIcon },
   { to: "/app/rooms", label: "Rooms", Icon: UsersIcon },
   { to: "/app/discover", label: "Discover", Icon: MagnifyingGlassIcon },
   { to: "/app/chillshots", label: "ChillShots", Icon: CameraIcon },
   { to: "/app/profile", label: "Profile", Icon: UserCircleIcon },
 ];
 
-// ...imports unchanged
-export default function Sidebar() {
+export default function BottomNav() {
   return (
-    <nav className="hidden md:flex w-[72px] border-r border-border bg-background flex flex-col items-center py-3 gap-2">
-      <div className="h-10 w-10 rounded-xl bg-card border border-border grid place-items-center mb-2">
-        <span className="text-sm font-semibold">cz</span>
-      </div>
-
+    <nav className="md:hidden fixed bottom-0 inset-x-0 h-14 bg-background/90 backdrop-blur border-t border-border flex items-center justify-around z-50">
       {items.map(({ to, label, Icon }) => (
         <NavLink
           key={to}
@@ -34,11 +27,8 @@ export default function Sidebar() {
           title={label}
           className={({ isActive }) =>
             clsx(
-              "h-11 w-11 rounded-xl grid place-items-center transition",
-              "border border-transparent",
-              isActive
-                ? "bg-card border-border"
-                : "hover:bg-card/60 hover:border-border"
+              "h-10 w-10 rounded-xl grid place-items-center transition border",
+              isActive ? "text-primary border-border bg-card" : "text-foreground border-transparent"
             )
           }
         >

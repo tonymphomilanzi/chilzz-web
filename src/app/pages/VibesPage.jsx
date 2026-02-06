@@ -14,6 +14,8 @@ import {
   where,
 } from "@/lib/firestore";
 
+import { ArrowLeftIcon } from "@heroicons/react/24/outline";
+
 import { useAuth } from "@/lib/auth";
 import { apiFetch } from "@/lib/api";
 
@@ -87,6 +89,40 @@ function isNearBottom(el, threshold = 140) {
   if (!el) return true;
   const remaining = el.scrollHeight - el.scrollTop - el.clientHeight;
   return remaining < threshold;
+}
+
+function TailRight({ fill = "hsl(var(--primary))" }) {
+  return (
+    <svg
+      className="absolute -right-[6px] bottom-[6px]"
+      width="12"
+      height="18"
+      viewBox="0 0 12 18"
+      aria-hidden="true"
+    >
+      <path
+        d="M1 0 C 8 6, 10 10, 1 18 L 12 18 L 12 0 Z"
+        fill={fill}
+      />
+    </svg>
+  );
+}
+
+function TailLeft({ fill = "hsl(var(--card))" }) {
+  return (
+    <svg
+      className="absolute -left-[6px] bottom-[6px]"
+      width="12"
+      height="18"
+      viewBox="0 0 12 18"
+      aria-hidden="true"
+    >
+      <path
+        d="M11 0 C 4 6, 2 10, 11 18 L 0 18 L 0 0 Z"
+        fill={fill}
+      />
+    </svg>
+  );
 }
 
 /* -------------------- component -------------------- */
@@ -452,7 +488,7 @@ export default function VibesPage() {
   return (
     <div className="h-full flex">
       {/* Left list */}
-      <section className="w-[320px] border-r border-border flex flex-col">
+     <section className={`${chatId ? "hidden md:flex" : "flex"} md:flex w-full md:w-[320px] border-r border-border flex-col`}>
         <div className="p-3 flex items-center justify-between gap-2">
           <div className="font-semibold">Your Vibes</div>
 
@@ -477,7 +513,7 @@ export default function VibesPage() {
       </section>
 
       {/* Center thread */}
-      <section className="flex-1 flex flex-col">
+      <section className={`${chatId ? "flex" : "hidden md:flex"} flex-1 flex-col`}>
         {/* Header */}
         <div className="h-14 border-b border-border px-4 flex items-center justify-between">
           {activeChat && myUid ? (
@@ -488,6 +524,17 @@ export default function VibesPage() {
 
               return (
                 <div className="flex items-center gap-3 min-w-0">
+
+                  {chatId ? (
+  <button
+    type="button"
+    onClick={() => nav("/app/vibes")}
+    className="md:hidden mr-2 h-9 w-9 rounded-xl border border-border bg-card grid place-items-center"
+    title="Back"
+  >
+    <ArrowLeftIcon className="h-5 w-5" />
+  </button>
+) : null}
                   <div className="relative">
                     <Avatar className="h-9 w-9 border border-border">
                       <AvatarImage src={meta.avatarUrl || ""} />
@@ -562,24 +609,28 @@ export default function VibesPage() {
                         </div>
                       ) : null}
 
-                      <div
-                        className={[
-                          "max-w-[72%] rounded-2xl border shadow-sm",
-                          mine
-                            ? "bg-primary text-primary-foreground border-transparent rounded-br-md"
-                            : "bg-card border-border rounded-bl-md",
-                        ].join(" ")}
-                      >
-                        <div className="relative px-3 py-2 pr-14">
-                          <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">
-                            {m.text}
-                          </div>
+                     <div
+  className={[
+    "relative max-w-[72%] rounded-2xl border shadow-sm",
+    mine
+      ? "bg-primary text-primary-foreground border-transparent rounded-br-md"
+      : "bg-card border-border rounded-bl-md",
+  ].join(" ")}
+>
+  {mine ? <TailRight /> : <TailLeft />}
 
-                          <div className="absolute bottom-1 right-2 text-[10px] opacity-70">
-                            {formatMsgTime(m.createdAt)}
-                          </div>
-                        </div>
-                      </div>
+  <div className="relative px-3 py-2 pr-14">
+    <div className="whitespace-pre-wrap break-words text-sm leading-relaxed">
+      {m.text}
+    </div>
+
+    <div className="absolute bottom-1 right-2 text-[10px] opacity-70">
+      {formatMsgTime(m.createdAt)}
+    </div>
+  </div>
+</div>
+
+
                     </div>
                   </React.Fragment>
                 );
@@ -625,7 +676,7 @@ export default function VibesPage() {
       <Dialog open={checksOpen} onOpenChange={setChecksOpen}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Vibe Checks 👀</DialogTitle>
+            <DialogTitle>Vibe Checks (People Intrested To Vibe With You)</DialogTitle>
           </DialogHeader>
 
           {checksLoading ? (
