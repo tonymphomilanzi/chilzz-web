@@ -2,6 +2,7 @@ import React from "react";
 import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import { usePresenceWriter } from "@/lib/presence";
+import BottomNav from "./BottomNav";
 
 export default function AppLayout() {
   usePresenceWriter();
